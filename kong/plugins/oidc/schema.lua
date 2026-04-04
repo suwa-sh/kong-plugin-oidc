@@ -175,6 +175,48 @@ return {
             }
           },
           {
+            session_storage = {
+              type = "string",
+              required = true,
+              default = "cookie",
+              one_of = { "cookie", "redis" }
+            }
+          },
+          {
+            session_redis_host = {
+              type = "string",
+              required = false,
+              default = "127.0.0.1"
+            }
+          },
+          {
+            session_redis_port = {
+              type = "number",
+              required = false,
+              default = 6379
+            }
+          },
+          {
+            session_redis_password = {
+              type = "string",
+              required = false
+            }
+          },
+          {
+            session_redis_database = {
+              type = "number",
+              required = false,
+              default = 0
+            }
+          },
+          {
+            session_redis_ssl = {
+              type = "string",
+              required = false,
+              default = "no"
+            }
+          },
+          {
             recovery_page_path = {
               type = "string"
             }

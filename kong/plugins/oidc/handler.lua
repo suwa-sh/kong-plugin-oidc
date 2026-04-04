@@ -1,9 +1,11 @@
 local OidcHandler = {
-    VERSION = "1.3.0",
+    VERSION = "1.5.0",
     PRIORITY = 1000,
 }
+-- luacheck: ignore 212/self
 local utils = require("kong.plugins.oidc.utils")
 local filter = require("kong.plugins.oidc.filter")
+local handle, make_oidc, introspect, verify_bearer_jwt
 
 function OidcHandler:configure(configs)
   -- Map openidc debug log level to configured Nginx log level
@@ -15,18 +17,18 @@ function OidcHandler:configure(configs)
       ["ngx.WARN"] = ngx.WARN,
       ["ngx.ERR"] = ngx.ERR
     }
-    
+
     local level_priority = {
       [ngx.DEBUG] = 1,
       [ngx.INFO] = 2,
       [ngx.WARN] = 3,
       [ngx.ERR] = 4
     }
-    
+
     local highest_level = ngx.DEBUG
     local highest_priority = 1
     local selected_level_name = "ngx.DEBUG"
-    
+
     for _, config in ipairs(configs) do
       if config and config.openidc_debug_log_level then
         local mapped_level = level_mapping[config.openidc_debug_log_level]
@@ -37,7 +39,7 @@ function OidcHandler:configure(configs)
         end
       end
     end
-    
+
     -- Configure openidc library to use the mapped log level
     local openidc = require("resty.openidc")
     openidc.set_logging(nil, {
@@ -45,7 +47,7 @@ function OidcHandler:configure(configs)
       ERROR = ngx.ERR,
       WARN = ngx.WARN
     })
-    
+
     ngx.log(ngx.INFO, "OIDC plugin configured openidc debug log level to: " .. selected_level_name)
   end
 end
@@ -70,7 +72,7 @@ function OidcHandler:access(config)
   ngx.log(ngx.DEBUG, "OidcHandler done")
 end
 
-function handle(oidcConfig)
+handle = function(oidcConfig)
   local response
 
   if oidcConfig.bearer_jwt_auth_enable then
@@ -127,15 +129,15 @@ function handle(oidcConfig)
   end
 end
 
-function make_oidc(oidcConfig)
+make_oidc = function(oidcConfig)
   ngx.log(ngx.DEBUG, "OidcHandler calling authenticate, requested path: " .. ngx.var.request_uri)
   local unauth_action = oidcConfig.unauth_action
   if unauth_action ~= "auth" then
     -- constant for resty.oidc library
     unauth_action = "deny"
   end
-  local session_config = { 
-    cookie_name = oidcConfig.cookie_name, 
+  local session_config = {
+    cookie_name = oidcConfig.cookie_name,
     secret = oidcConfig.encryption_secret,
     idling_timeout = oidcConfig.session_opts.idling_timeout,
     rolling_timeout = oidcConfig.session_opts.rolling_timeout,
@@ -143,6 +145,18 @@ function make_oidc(oidcConfig)
     remember_rolling_timeout = oidcConfig.session_opts.remember_rolling_timeout,
     remember_absolute_timeout = oidcConfig.session_opts.remember_absolute_timeout,
   }
+
+  if oidcConfig.session_opts.storage == "redis" then
+    session_config.storage = "redis"
+    session_config.redis = {
+      host = oidcConfig.session_opts.redis_host,
+      port = oidcConfig.session_opts.redis_port,
+      password = oidcConfig.session_opts.redis_password,
+      database = oidcConfig.session_opts.redis_database,
+      ssl = oidcConfig.session_opts.redis_ssl,
+    }
+  end
+
   local res, err = require("resty.openidc").authenticate(oidcConfig, ngx.var.request_uri, unauth_action, session_config)
 
   if err then
@@ -150,7 +164,7 @@ function make_oidc(oidcConfig)
       return kong.response.error(ngx.HTTP_UNAUTHORIZED)
     else
       if oidcConfig.recovery_page_path then
-    	  ngx.log(ngx.DEBUG, "Redirecting to recovery page: " .. oidcConfig.recovery_page_path)
+        ngx.log(ngx.DEBUG, "Redirecting to recovery page: " .. oidcConfig.recovery_page_path)
         ngx.redirect(oidcConfig.recovery_page_path)
       end
       return kong.response.error(ngx.HTTP_INTERNAL_SERVER_ERROR)
@@ -159,7 +173,7 @@ function make_oidc(oidcConfig)
   return res
 end
 
-function introspect(oidcConfig)
+introspect = function(oidcConfig)
   if utils.has_bearer_access_token() or oidcConfig.bearer_only == "yes" then
     local res, err
     if oidcConfig.use_jwks == "yes" then
@@ -169,7 +183,7 @@ function introspect(oidcConfig)
     end
     if err then
       if oidcConfig.bearer_only == "yes" then
-        ngx.header["WWW-Authenticate"] = 'Bearer realm="' .. oidcConfig.realm .. '",error="' .. err .. '"'
+        ngx.header["WWW-Authenticate"] = 'Bearer realm="' .. oidcConfig.realm .. '",error="' .. err .. '"' -- luacheck: ignore 122
         return kong.response.error(ngx.HTTP_UNAUTHORIZED)
       end
       return nil
@@ -195,7 +209,7 @@ function introspect(oidcConfig)
   return nil
 end
 
-function verify_bearer_jwt(oidcConfig)
+verify_bearer_jwt = function(oidcConfig)
   if not utils.has_bearer_access_token() then
     return nil
   end
@@ -230,7 +244,8 @@ function verify_bearer_jwt(oidcConfig)
     nbf = jwt_validators.opt_is_not_before(),
   }
 
-  local json, err, token = require("resty.openidc").bearer_jwt_verify(opts, claim_spec)
+  local json
+  json, err = require("resty.openidc").bearer_jwt_verify(opts, claim_spec)
   if err then
     kong.log.err('Bearer JWT verify failed: ' .. err)
     return nil
