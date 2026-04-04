@@ -85,6 +85,8 @@ C4Component
 
 ## 4. シーケンス図 (Sequence Diagrams)
 
+以下のシーケンス図では、`lua-resty-openidc` 内部の動作（セッション操作、ディスカバリ取得、リダイレクト生成、コード交換等）はライブラリ委譲された処理として記載している。プラグインコードが直接実装しているのは `resty.openidc.authenticate()` / `bearer_jwt_verify()` / `introspect()` / `get_discovery_doc()` の呼び出しまでである。
+
 ### 4a. 初回認証フロー (Authorization Code Flow)
 
 ユーザーが初めてアクセスした場合の認証フロー。セッションが存在しないため、Keycloak にリダイレクトして認証後、コールバックでトークンを取得し、セッションを保存する。
@@ -106,10 +108,13 @@ sequenceDiagram
     Kong->>Handler: access(config)
     Handler->>Utils: get_options(config, ngx)
     Utils-->>Handler: oidcConfig
+
+    Note over Handler: skip_already_auth_requests check (early return if credential already set)
+
     Handler->>Filter: shouldProcessRequest(oidcConfig)
     Filter-->>Handler: true
 
-    Note over Handler: No bearer token, no introspection_endpoint configured
+    Note over Handler: bearer_jwt_auth_enable=off, introspection_endpoint=nil -> skip to make_oidc
     Handler->>OpenIDC: authenticate(oidcConfig, uri, "auth", session_config)
     OpenIDC->>Session: open session
     Session->>Redis: read session data
@@ -172,9 +177,13 @@ sequenceDiagram
     Kong->>Handler: access(config)
     Handler->>Utils: get_options(config, ngx)
     Utils-->>Handler: oidcConfig
+
+    Note over Handler: skip_already_auth_requests check (early return if credential already set)
+
     Handler->>Filter: shouldProcessRequest(oidcConfig)
     Filter-->>Handler: true
 
+    Note over Handler: bearer_jwt_auth_enable=off, introspection_endpoint=nil -> skip to make_oidc
     Handler->>OpenIDC: authenticate(oidcConfig, uri, "auth", session_config)
     OpenIDC->>Session: open session (from cookie)
     Session->>Redis: read session data
@@ -217,9 +226,13 @@ sequenceDiagram
     Kong->>Handler: access(config)
     Handler->>Utils: get_options(config, ngx)
     Utils-->>Handler: oidcConfig
+
+    Note over Handler: skip_already_auth_requests check (early return if credential already set)
+
     Handler->>Filter: shouldProcessRequest(oidcConfig)
     Filter-->>Handler: true
 
+    Note over Handler: bearer_jwt_auth_enable=off, introspection_endpoint=nil -> skip to make_oidc
     Handler->>OpenIDC: authenticate(oidcConfig, uri, "auth", session_config)
     OpenIDC->>Session: open session (from cookie)
     Session->>Redis: read session data
@@ -238,4 +251,70 @@ sequenceDiagram
 
     Client->>Keycloak: GET /realms/master/protocol/openid-connect/auth
     Keycloak-->>Client: Login page (or SSO if Keycloak session still valid)
+```
+
+### 4d. Bearer JWT 認証フロー
+
+`bearer_jwt_auth_enable` が有効な場合、Authorization ヘッダーの Bearer トークンを JWKS で検証する。セッション不要で、Keycloak へのリダイレクトは発生しない。
+
+```mermaid
+sequenceDiagram
+    participant Client as API Client
+    participant Kong as Kong Gateway
+    participant Handler as OidcHandler
+    participant Utils as utils.lua
+    participant OpenIDC as lua-resty-openidc
+    participant Keycloak as Keycloak (via Traefik)
+    participant Upstream as Upstream Service
+
+    Client->>Kong: GET /api/resource (Authorization: Bearer <JWT>)
+    Kong->>Handler: access(config)
+    Handler->>Utils: get_options(config, ngx)
+
+    Note over Handler: bearer_jwt_auth_enable=on, bearer token detected
+
+    Handler->>OpenIDC: get_discovery_doc(opts)
+    OpenIDC->>Keycloak: GET /.well-known/openid-configuration (cached)
+    Keycloak-->>OpenIDC: discovery document
+    Handler->>OpenIDC: bearer_jwt_verify(opts, claim_spec)
+    OpenIDC->>Keycloak: GET /certs (JWKS, cached)
+    Keycloak-->>OpenIDC: JSON Web Key Set
+    OpenIDC-->>Handler: verified JWT claims
+
+    Handler->>Utils: setCredentials(claims)
+    Handler->>Utils: injectGroups(claims, groups_claim)
+    Handler->>Utils: injectHeaders(header_names, header_claims, sources)
+    Handler->>Utils: injectUser(claims, "X-USERINFO")
+
+    Kong->>Upstream: Proxied request with auth headers
+    Upstream-->>Kong: Response
+    Kong-->>Client: Response
+
+    Note over Handler: JWT verification failure -> return nil, fall through to introspect/make_oidc
+```
+
+### 4e. エラーフロー
+
+認証失敗時のレスポンス分岐を示す。
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Kong as Kong Gateway
+    participant Handler as OidcHandler
+
+    Note over Handler: bearer_only="yes" + introspection error
+    Handler-->>Client: 401 Unauthorized (WWW-Authenticate: Bearer realm="kong", error="...")
+
+    Note over Handler: validate_scope="yes" + scope mismatch
+    Handler-->>Client: 403 Forbidden
+
+    Note over Handler: authenticate() error = "unauthorized request"
+    Handler-->>Client: 401 Unauthorized
+
+    Note over Handler: authenticate() other error + recovery_page_path set
+    Handler-->>Client: 302 Redirect to recovery_page_path
+
+    Note over Handler: authenticate() other error + no recovery page
+    Handler-->>Client: 500 Internal Server Error
 ```
