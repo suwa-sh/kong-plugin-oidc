@@ -63,7 +63,9 @@
 - [x] Context図: システム全体の境界と外部アクター（ユーザー、Keycloak、upstream サービス、Redis）
 - [x] Container図: Kong / OIDC Plugin / Traefik / Keycloak / MockServer / Redis の関係と通信フロー
 - [x] Component図: プラグイン内部の構成（handler / utils / filter / schema / lua-resty-openidc / lua-resty-session / jwt-validators）
-- [x] シーケンス図（5フロー、`docs/architecture.md`）
+- [x] コンテナ間シーケンス図（4フロー、`docs/architecture.md` section 2.1）
+- [x] データモデル: 概念・論理（classDiagram）・データフロー（`docs/architecture.md` section 5）
+- [x] コンポーネント粒度シーケンス図（5フロー、`docs/architecture.md` section 4）
   - 4a: 初回認証フロー（Authorization Code Flow → セッション発行 → Redis 保存）
   - 4b: 認証済みリクエスト（セッション有効 → タイムアウト検証 → upstream 転送）
   - 4c: セッション期限切れ（無効判定 → Keycloak 再認証リダイレクト）

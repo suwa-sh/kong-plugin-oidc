@@ -16,3 +16,6 @@ bin/venv/
 .dccache
 
 logs/
+
+# Claude Code worktrees
+.claude/worktrees/
