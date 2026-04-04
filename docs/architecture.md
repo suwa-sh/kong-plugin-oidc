@@ -1,86 +1,139 @@
-# Kong OIDC Plugin - C4 Model Architecture
+# Kong OIDC Plugin - Architecture
 
 ## 1. コンテキスト図 (Context Diagram)
 
-システム全体の境界と外部アクターの関係を示す。Kong Gateway と OIDC Plugin をシステム境界とし、外部のユーザー、認証プロバイダ、上流サービス、セッションストアとの関係を表現する。
+システム全体の境界と外部アクターの関係を示す。Kong Gateway + OIDC Plugin をシステム境界とし、外部のユーザー、認証プロバイダ、上流サービス、セッションストアとの通信フローを表現する。
 
 ```mermaid
-C4Context
-    title Kong OIDC Plugin - System Context Diagram
+graph TB
+    User["End User (Browser)"]
+    Kong["Kong Gateway + OIDC Plugin"]
+    Keycloak["Keycloak (OIDC Provider)"]
+    Upstream["Upstream Services"]
+    Redis["Redis (Session Store, optional)"]
 
-    Person(user, "End User", "Browser-based user accessing protected resources")
-
-    System_Boundary(kong_system, "Kong Gateway + OIDC Plugin") {
-        System(kong, "Kong API Gateway", "API Gateway with OIDC authentication plugin (DBless mode, declarative config)")
-    }
-
-    System_Ext(keycloak, "Keycloak", "OpenID Connect Provider - issues tokens, manages user sessions")
-    System_Ext(upstream, "Upstream Services", "Backend services receiving authenticated requests")
-    System_Ext(redis, "Redis", "Session store for OIDC session data (optional, alternative to cookie)")
-
-    Rel(user, kong, "HTTP requests", "HTTP/8000")
-    Rel(kong, keycloak, "OIDC discovery, token exchange, introspection", "HTTP")
-    Rel(kong, upstream, "Proxied requests with injected auth headers", "HTTP")
-    Rel(kong, redis, "Session read/write", "TCP/6379")
-    Rel(keycloak, user, "Authentication redirect, login page", "HTTP/302")
+    User -- "HTTP :8000" --> Kong
+    Kong -- "OIDC / Token" --> Keycloak
+    Kong -- "Proxy" --> Upstream
+    Kong -. "Session R/W" .-> Redis
+    Keycloak -- "302 Redirect" --> User
 ```
 
 ## 2. コンテナ図 (Container Diagram)
 
-インフラストラクチャを構成するコンテナ間の通信とポート、プロトコルを示す。全コンテナは Podman Pod 内で動作し、Pod 内ネットワーク (localhost) で通信する。
+Podman Pod 内のコンテナ配置とルーティングを示す。Kong はリクエストを受け付け、認証時は Traefik 経由で Keycloak と通信し、認証後は MockServer（バックエンド）へプロキシする。
 
 ```mermaid
-C4Container
-    title Kong OIDC Plugin - Container Diagram
+graph LR
+    User["End User"]
 
-    Person(user, "End User", "Browser")
+    subgraph Pod["Docker Pod"]
+        Kong["Kong (:8000 / :8001)"]
+        Traefik["Traefik (:8888)"]
+        Keycloak["Keycloak (:8080)"]
+        MockServer["MockServer (:1080)"]
+        Redis["Redis (:6379)"]
+    end
 
-    Container_Boundary(pod, "Podman Pod: kong-oidc") {
-        Container(kong, "Kong Gateway", "OpenResty/Lua", "API Gateway in DBless mode. Runs OIDC plugin (priority 1000). Ports: 8000 (proxy), 8001 (admin/metrics)")
-        Container(oidc_plugin, "OIDC Plugin", "Lua (kong-oidc)", "Custom plugin: Authorization Code flow, Bearer JWT verify, Token Introspection, Session management")
-        Container(traefik, "Traefik", "Traefik v3", "Reverse proxy for Keycloak. Routes /realms/* requests. Port: 8888")
-        Container(keycloak, "Keycloak", "Keycloak 24.0.5", "OIDC Provider in dev mode. Port: 8080")
-        Container(mockserver, "MockServer", "MockServer 5.15.0", "HTTP mock backend for testing. Port: 1080")
-    }
+    User -- ":8000" --> Kong
+    Kong -- ":1080" --> MockServer
+    Kong -- ":8888" --> Traefik
+    Traefik -- ":8080" --> Keycloak
+    Kong -- "Session R/W" --> Redis
+```
 
-    System_Ext(redis, "Redis", "Session store (optional)")
+### 2.1. コンテナ間シーケンス図
 
-    Rel(user, kong, "HTTP requests to protected resources", "HTTP/8000")
-    Rel(user, keycloak, "Keycloak admin console", "HTTP/8080")
-    Rel(kong, oidc_plugin, "Access phase hook", "Lua internal")
-    Rel(oidc_plugin, traefik, "OIDC discovery, token exchange, JWKS fetch", "HTTP/8888")
-    Rel(traefik, keycloak, "Proxy /realms/* to Keycloak", "HTTP/8080")
-    Rel(kong, mockserver, "Proxy upstream requests", "HTTP/1080")
-    Rel(oidc_plugin, redis, "Session read/write", "TCP/6379")
-    Rel(oidc_plugin, user, "302 redirect to Keycloak login", "HTTP")
+コンテナ図の構成要素を participant として、主要な認証フローをまとめて示す。
+
+```mermaid
+sequenceDiagram
+    participant User as End User
+    participant Kong as Kong
+    participant Traefik as Traefik
+    participant Keycloak as Keycloak
+    participant Redis as Redis
+    participant Mock as MockServer
+
+    Note over User,Mock: 初回認証フロー (Authorization Code Flow)
+
+    User->>Kong: GET /some/path
+    Kong->>Redis: セッション読み取り
+    Redis-->>Kong: セッションなし
+    Kong->>Traefik: OIDC ディスカバリ取得
+    Traefik->>Keycloak: GET /.well-known/openid-configuration
+    Keycloak-->>Traefik: ディスカバリドキュメント
+    Traefik-->>Kong: ディスカバリドキュメント
+    Kong-->>User: 302 Redirect to Keycloak
+    User->>Keycloak: ログインページ表示・認証
+    Keycloak-->>User: 302 Redirect to callback (code, state)
+    User->>Kong: GET /callback?code=xxx&state=yyy
+    Kong->>Traefik: POST /token (code exchange)
+    Traefik->>Keycloak: POST /token
+    Keycloak-->>Traefik: access_token, id_token
+    Traefik-->>Kong: access_token, id_token
+    Kong->>Redis: セッション保存
+    Redis-->>Kong: OK
+    Kong->>Mock: プロキシ (認証ヘッダー付き)
+    Mock-->>Kong: レスポンス
+    Kong-->>User: レスポンス (Set-Cookie)
+
+    Note over User,Mock: 認証済みリクエスト (セッション有効)
+
+    User->>Kong: GET /some/path (session cookie)
+    Kong->>Redis: セッション読み取り
+    Redis-->>Kong: セッションデータ (有効)
+    Kong->>Mock: プロキシ (認証ヘッダー付き)
+    Mock-->>Kong: レスポンス
+    Kong-->>User: レスポンス
+
+    Note over User,Mock: セッション期限切れ
+
+    User->>Kong: GET /some/path (expired cookie)
+    Kong->>Redis: セッション読み取り
+    Redis-->>Kong: セッション期限切れ
+    Kong->>Redis: セッション削除
+    Kong-->>User: 302 Redirect to Keycloak
+    User->>Keycloak: 再認証 (SSO or ログイン)
+
+    Note over User,Mock: Bearer JWT 認証 (API アクセス)
+
+    User->>Kong: GET /api (Authorization: Bearer JWT)
+    Kong->>Traefik: JWKS 取得 (cached)
+    Traefik->>Keycloak: GET /certs
+    Keycloak-->>Traefik: JWKS
+    Traefik-->>Kong: JWKS
+    Kong->>Kong: JWT 署名・クレーム検証
+    Kong->>Mock: プロキシ (認証ヘッダー付き)
+    Mock-->>Kong: レスポンス
+    Kong-->>User: レスポンス
 ```
 
 ## 3. コンポーネント図 (Component Diagram)
 
-OIDC Plugin の内部構造を示す。各 Lua モジュールの責務と、外部ライブラリとの依存関係を表現する。
+OIDC Plugin を構成する Lua モジュールと外部ライブラリの依存関係を示す。handler.lua がエントリポイントとなり、認証処理を統括する。
 
 ```mermaid
-C4Component
-    title Kong OIDC Plugin - Component Diagram
+graph TB
+    subgraph Plugin["OIDC Plugin"]
+        handler["handler.lua (entry point)"]
+        utils["utils.lua"]
+        filter["filter.lua"]
+        schema["schema.lua"]
+    end
 
-    Container_Boundary(oidc, "OIDC Plugin (kong/plugins/oidc/)") {
-        Component(handler, "OidcHandler", "handler.lua", "Access phase entry point (PRIORITY 1000). Orchestrates authentication: verify_bearer_jwt -> introspect -> make_oidc (Authorization Code flow). Configures openidc log level.")
-        Component(utils, "Utils", "utils.lua", "Config assembly (get_options), header injection (injectUser, injectAccessToken, injectIDToken, injectHeaders), credential management (setCredentials), group injection (injectGroups)")
-        Component(filter, "Filter", "filter.lua", "URI pattern matching (shouldProcessRequest). Checks request path against configured filter patterns to skip OIDC processing.")
-        Component(schema, "Schema", "schema.lua", "Kong plugin schema definition. Defines all configuration fields: client credentials, discovery URL, session timeouts, header names, bearer JWT settings, etc.")
-    }
+    subgraph Libs["External Libraries"]
+        openidc["lua-resty-openidc"]
+        session["lua-resty-session"]
+        jwt["resty.jwt-validators"]
+    end
 
-    Container_Boundary(deps, "External Libraries") {
-        Component(openidc, "lua-resty-openidc", "v1.8.0", "OIDC library: authenticate() for Authorization Code flow, bearer_jwt_verify() for JWT validation, introspect() for token introspection, get_discovery_doc() for OIDC discovery")
-        Component(session, "lua-resty-session", "v4.0.5", "Session management: cookie-based or Redis-based storage, session encryption, timeout management")
-        Component(jwt_validators, "resty.jwt-validators", "Lua library", "JWT claim validation: issuer, audience, expiry, not-before checks with configurable leeway")
-    }
-
-    Rel(handler, utils, "get_options(), setCredentials(), injectUser(), injectAccessToken(), injectIDToken(), injectHeaders(), injectGroups(), has_bearer_access_token()")
-    Rel(handler, filter, "shouldProcessRequest()")
-    Rel(handler, openidc, "authenticate(), bearer_jwt_verify(), introspect(), get_discovery_doc()")
-    Rel(handler, jwt_validators, "set_system_leeway(), equals(), required(), is_not_expired(), opt_is_not_before()")
-    Rel(openidc, session, "Session create/read/update via cookie or Redis storage")
+    handler -- "get_options, injectHeaders,\nsetCredentials" --> utils
+    handler -- "shouldProcessRequest" --> filter
+    handler -- "authenticate, bearer_jwt_verify,\nintrospect" --> openidc
+    handler -- "set_system_leeway,\nequals, is_not_expired" --> jwt
+    openidc -- "Session管理" --> session
+    schema -. "config定義" .-> handler
 ```
 
 ## 4. シーケンス図 (Sequence Diagrams)
@@ -317,4 +370,168 @@ sequenceDiagram
 
     Note over Handler: authenticate() other error + no recovery page
     Handler-->>Client: 500 Internal Server Error
+```
+
+## 5. データモデル (Data Model)
+
+### 5.1. 概念データモデル
+
+プラグイン内で扱う主要なデータ概念とその関係を示す。
+
+```mermaid
+graph TB
+    Config["Plugin Config"]
+    OidcConfig["oidcConfig"]
+    SessionConfig["session_config"]
+    Session["Session"]
+    AuthResponse["Auth Response"]
+    Credential["Kong Credential"]
+    Headers["Upstream Headers"]
+
+    Config -- "get_options()で変換" --> OidcConfig
+    OidcConfig -- "session_opts抽出" --> SessionConfig
+    SessionConfig -- "セッション管理" --> Session
+    OidcConfig -- "認証処理" --> AuthResponse
+    AuthResponse -- "setCredentials()" --> Credential
+    AuthResponse -- "inject*()" --> Headers
+```
+
+| 要素 | 説明 |
+|------|------|
+| Plugin Config | Kong の宣言的設定（`kong.yml`）または Admin API から渡されるプラグイン設定。`schema.lua` で定義 |
+| oidcConfig | `utils.get_options()` で Plugin Config から変換された実行時設定。文字列の `"yes"/"no"` を boolean に変換し、フィルタパターンをパース済み |
+| session_config | `make_oidc()` で oidcConfig から抽出されたセッション設定。Cookie 名、暗号化シークレット、タイムアウト、Redis 接続情報を含む |
+| Session | `lua-resty-session` が管理するセッションデータ。Cookie または Redis に暗号化して保存。`session_contents` で保存対象を制御（id_token, enc_id_token, access_token） |
+| Auth Response | `lua-resty-openidc` の認証結果。認証方式により構造が異なる（Authorization Code: user + id_token + access_token、Bearer JWT / Introspection: トークンクレーム直接） |
+| Kong Credential | `setCredentials()` で設定される Kong 認証情報。`sub` → `id`、`preferred_username` → `username` にマッピングし、`kong.client.authenticate()` に渡す |
+| Upstream Headers | バックエンドに注入される認証ヘッダー。`X-USERINFO`（Base64）、`X-Access-Token`、`X-ID-Token`（Base64）、および `header_names`/`header_claims` で定義されたカスタムヘッダー |
+
+### 5.2. 論理データモデル
+
+各データ概念の主要な属性をクラス図で示す。
+
+```mermaid
+classDiagram
+    class PluginConfig {
+        client_id: string
+        client_secret: string
+        discovery: string
+        redirect_uri: string
+        unauth_action: string
+        bearer_jwt_auth_enable: string
+        session_storage: string
+        session_redis_host: string
+        encryption_secret: string
+    }
+
+    class oidcConfig {
+        client_id: string
+        client_secret: string
+        discovery: string
+        bearer_jwt_auth_enable: boolean
+        introspection_endpoint: string
+        filters: table
+        session_contents: table
+        session_opts: table
+    }
+
+    class session_config {
+        cookie_name: string
+        secret: string
+        idling_timeout: number
+        rolling_timeout: number
+        absolute_timeout: number
+        storage: string
+        redis: table
+    }
+
+    class Session {
+        id_token: table
+        enc_id_token: string
+        access_token: string
+        user: table
+    }
+
+    class AuthResponse {
+        user: table
+        id_token: table
+        access_token: string
+    }
+
+    class Credential {
+        id: string
+        username: string
+        sub: string
+        preferred_username: string
+    }
+
+    class UpstreamHeaders {
+        X_USERINFO: base64
+        X_Access_Token: string
+        X_ID_Token: base64
+        X_Credential_Identifier: string
+    }
+
+    PluginConfig --> oidcConfig : get_options()
+    oidcConfig --> session_config : make_oidc()
+    session_config --> Session : lua-resty-session
+    oidcConfig --> AuthResponse : authenticate / verify
+    AuthResponse --> Credential : setCredentials()
+    AuthResponse --> UpstreamHeaders : inject*()
+```
+
+### 5.3. データフロー
+
+概念データモデル上でのデータの流れを、認証フェーズごとに示す。
+
+```mermaid
+graph LR
+    subgraph Input["入力"]
+        Req["HTTP Request"]
+        Cookie["Session Cookie"]
+        Bearer["Bearer Token"]
+    end
+
+    subgraph Transform["変換 (OIDC Plugin)"]
+        Config["Plugin Config"]
+        OidcConf["oidcConfig"]
+        SessConf["session_config"]
+    end
+
+    subgraph Auth["認証"]
+        MakeOIDC["Authorization Code"]
+        Introspect["Introspection"]
+        JWT["Bearer JWT Verify"]
+    end
+
+    subgraph Store["ストレージ"]
+        RedisSess["Redis / Cookie"]
+    end
+
+    subgraph Output["出力"]
+        Cred["Kong Credential"]
+        Hdrs["Upstream Headers"]
+    end
+
+    Req --> Config
+    Config -- "get_options()" --> OidcConf
+    OidcConf -- "session_opts" --> SessConf
+    SessConf --> RedisSess
+
+    Cookie --> RedisSess
+    RedisSess -- "session data" --> MakeOIDC
+
+    Bearer --> JWT
+    OidcConf --> MakeOIDC
+    OidcConf --> Introspect
+    OidcConf --> JWT
+
+    MakeOIDC --> Cred
+    MakeOIDC --> Hdrs
+    Introspect --> Cred
+    Introspect --> Hdrs
+    JWT --> Cred
+    JWT --> Hdrs
+
+    MakeOIDC -- "セッション保存" --> RedisSess
 ```

@@ -1,130 +1,50 @@
 # kong-oidc
-## description
-This plugin was initially started by a [Nokia open-source project](https://github.com/nokia/kong-oidc). Since the initial project has stopped being supported in 2019, it has been forked in 2021 by [another repo](https://github.com/revomatico/kong-oidc) which is archived since 2024.  
-The plugin relies on the Nginx [lua-resty-openidc library](https://github.com/zmartzone/lua-resty-openidc) which is OIDC certified.
-The lua-resty-openidc library allows an Nginx server to implement an Oauth2 resource server but it also allows to implement the responsibility of the OIDC Relying Party which off-load the responsibility from the front-end. Thanks to the library the state (access/ID/refresh tokens) of the session is encrypted and stored as a cookie.
 
-The diagrams below provide more details on how this plugin works at runtime.  
-```mermaid
-  sequenceDiagram
-      participant Client
-      participant Kong as Kong OIDC Plugin
-      participant Session as lua-resty-session
-      participant OP as OpenID Provider
-      participant RS as Resource Server
+## 概要
 
-      Note over Client,RS: Authorization Code Flow (Interactive Authentication)
+[Kong](https://github.com/Kong/kong) 用の [OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) Relying Party (RP) プラグイン。
 
-      Client->>+Kong: GET /protected-resource
-      Kong->>Session: session.start() - check existing session
-      Session->>Kong: return existing or new session
-      
-      alt user authentication is required
-          Kong-->>Kong: Generate state, nonce, code_verifier
-          Kong->>Session: Save authorization parameters
-          Kong-->>Kong: Build authorization URL with PKCE
-          Kong->>Client: 302 Redirect to OP authorization endpoint<br/>with state, nonce, code_challenge
-          Client->>OP: GET /auth?response_type=code&client_id=...&state=...&nonce=...
-          OP->>Client: Login page
-          Client->>OP: POST credentials
-          OP->>Client: 302 Redirect with authorization code<br/>to redirect_uri?code=xyz&state=...
-          
-          Client->>+Kong: GET /oauth2-callback?code=xyz&state=...
-          Kong->>Session: Read state
-          Kong-->>Kong: Validate state parameter
-          Kong->>OP: POST /token<br/>grant_type=authorization_code<br/>code=xyz<br/>code_verifier=...
-          OP->>Kong: {access_token, id_token, refresh_token}
-          Kong->>Session: Read nonce
-          Kong-->>Kong: Validate ID token signature & claims
-          
-          opt Userinfo endpoint configured
-              Kong->>OP: GET /userinfo<br/>Authorization: Bearer <access_token>
-              OP->>Kong: User profile data
-          end
-          
-          Kong->>Session: Save tokens & user data in encrypted session
-          Kong->>-Client: 302 Redirect to initial URL with Set-Cookie header
-          Client->>+Kong: GET /protected-resource
-          
-      else Valid session exists
-          Kong->>Session: Retrieve session data
-          Session->>Kong: Tokens & user data
-          Kong-->>Kong: Validate token expiration
-          
-          opt Token expired & refresh available
-              Kong->>OP: POST /token<br/>grant_type=refresh_token<br/>refresh_token=...
-              OP->>Kong: New access_token & id_token
-              Kong->>Session: Update session with new tokens
-          end
-          
-      end
-      
-      Kong->>RS: Forward request with injected headers<br/>(X-Userinfo, X-Access-Token, etc.)
-      RS->>Kong: Response
-      Kong->>-Client: Response with encrypted session cookie
+[OpenID Connect Discovery](http://openid.net/specs/openid-connect-discovery-1_0.html) と Authorization Code フローにより、OpenID Connect Provider に対してユーザーを認証する。`lua-resty-openidc` を利用し、認証済みセッションを Cookie または Redis に暗号化して保存する。
 
-      Note over Client,RS: Bearer Token Flow (API Authentication)
+ディスカバリドキュメントとアクセストークンのサーバーワイドキャッシュに対応。OAuth/OpenID Connect を終端するリバースプロキシとして、バックエンドサービス側での認証実装を不要にする。
 
-      Client->>+Kong: GET /api/resource<br/>Authorization: Bearer <jwt-token>
-      Kong-->>Kong: Extract bearer token from Authorization header
-      
-      alt Bearer JWT verification enabled
-          Kong->>OP: GET /.well-known/openid-configuration (cached)
-          OP->>Kong: Discovery document with jwks_uri
-          Kong->>OP: GET /jwks (if not cached)
-          OP->>Kong: JSON Web Key Set
-          Kong-->>Kong: Verify JWT signature using JWKS
-          Kong-->>Kong: Validate claims (iss, aud, exp, nbf)
-          
-      else Token Introspection
-          Kong->>OP: POST /introspect<br/>token=<access_token><br/>+client_auth
-          OP->>Kong: {active: true/false, scope, exp, ...}
-          Kong-->>Kong: Check token active status & scope
-      end
-      
-      alt Token valid
-          Kong->>RS: Forward request with headers
-          RS->>Kong: Response
-          Kong->>-Client: Response
-      else Token invalid/expired
-          Kong->>-Client: 401 Unauthorized<br/>WWW-Authenticate: Bearer realm="..."<br/>error="invalid_token"
-      end
+アーキテクチャの詳細は [docs/architecture.md](docs/architecture.md) を参照。
 
-      Note over Client,RS: Logout Flow
+## 依存関係
 
-      Client->>+Kong: GET /logout
-      Kong->>Session: Retrieve session for id_token_hint
-      Session->>Kong: Session data with id_token
-      Kong->>Session: session.destroy()
-      
-      opt Revoke tokens on logout
-          Kong->>OP: POST /revoke<br/>token=<access_token>
-          Kong->>OP: POST /revoke<br/>token=<refresh_token>
-      end
-      
-      Kong->>-Client: 302 Redirect to end_session and clear session cookie
-      Client->>OP: GET /end_session<br/>?id_token_hint=<id_token><br/>&post_logout_redirect_uri=...
-      OP->>Client: 302 Redirect to post_logout_redirect_uri
+- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/) ~> 1.8.0
+
+## インストール
+
+```bash
+luarocks install kong-oidc
 ```
 
-## build & run
-Build Kong image embedded with the OIDC plugin
+`KONG_PLUGINS` 環境変数に `oidc` を追加:
+
+```bash
+export KONG_PLUGINS=bundled,oidc
 ```
+
+## ビルド・実行
+
+Kong イメージのビルド（OIDC プラグイン同梱）:
+```bash
 podman build -t kong:kong-oidc .
 ```
 
-Create podman network
-```
+Podman ネットワーク作成:
+```bash
 podman network create foo
 ```
 
-Spin up Kong, Keycloak and a HTTP mock assuming the role of a secured application.
-```
+Kong, Keycloak, HTTP モック（バックエンド役）を起動:
+```bash
 podman play kube pods.yml --net foo
 ```
 
-Configure the HTTP mock to return headers proxied by Kong.  
-```
+HTTP モックの設定（Kong が中継したヘッダーを返すよう設定）:
+```bash
 curl -v -X PUT "http://localhost:1080/mockserver/expectation" -d '{
     "httpRequest": {
         "path": "/"
@@ -136,46 +56,305 @@ curl -v -X PUT "http://localhost:1080/mockserver/expectation" -d '{
 }'
 ```
 
-Import an OIDC client from `keycloak-client.json` file in keycloak running on `http://localhost:8080/admin/master/console/#/master/clients`.  
+`keycloak-client.json` を Keycloak 管理画面（`http://localhost:8080/admin/master/console/#/master/clients`）からインポートする。
 
-Browse the resource server at:
+保護されたリソースにアクセス:
 ```
 http://localhost:8000/some/path
 ```
 
-Prometheus metrics are available on the admin port at `http://localhost:8001/metrics`.  
+Prometheus メトリクス:
+```
+http://localhost:8001/metrics
+```
 
-Logout:
+ログアウト:
 ```
 http://localhost:8000/logout
 ```
 
-Shutdown:
-```
+停止:
+```bash
 podman play kube pods.yml --down
 ```
 
-## configuration
-### user info
-The [open-source plugin](https://github.com/revomatico/kong-oidc) ignores the `session_contents` configuration provided by the [Lua resty openidc library](https://github.com/zmartzone/lua-resty-openidc/tree/v1.7.6?tab=readme-ov-file#sample-configuration-for-google-signin).  
-This field allows to control what is stored into the session.  
-An improvement to the open-source plugin is made in `utils.get_options()` function to disable the requests to the user-info endpoint (as the ID token is already stored). Otherwise the user-info endpoint is called after the code exchange (but for some reason it's not updated after token request see https://github.com/zmartzone/lua-resty-openidc/blob/v1.7.6/lib/resty/openidc.lua#L1165).
+## 設定パラメータ
 
-# troubleshooting
-## `request to the redirect_uri path, but there's no session state found`
-This error is raised when the plugin fails to get the session from the cookie.  
-There are multiple causes for this issue:
-- misconfigured redirect URI: if the configured redirect URI is not specific enough (i.e. the same as the route exposed by Kong), the user will hit this endpoint directly (before being redirected to the authorization server) and before having receive any cookie. Then Kong OIDC plugin consider it has to perform a code exchange and fail trying to identify the session.
-- inconsistent scheme: if the flow is initiated over HTTP but the redirect URI is using HTTPS then the cookie won't be sent to the redirect URI endpoint.
-- session secret: if not set, a default secret is generated by the Kong workers leading to different secrets being used and workers unable to decrypt the session encrypted by another worker.
-- `SameSite` cookie attribute: the session cookie used by the Kong OIDC plugin should be set to `Lax` or `None` so that it's set even if the user land in the endpoint from a link
-- header limit: since the cookie contains access/ID/refresh tokens it might be truncate if there is reverse proxy in front of Kong
-- session timeout: by default, the resty-session module expires the session after 15 minutes of inactivity. Therefore if the login process was idle for more than 15 minutes then this issue occurs.
-- user bookmark: the redirections of the login flow should happen in two steps. First from Kong to the OpenId Provider, then from the OP back to Kong. If the user has bookmarked the login page of the OP, the next time he tries to login his session might not be recognized by Kong, espcially if the resty-session timeouts are not disabled (see [configuration schema](kong/plugins/oidc/schema.lua)).
-## `state from argument: xxx does not match state restored from session: yyy`
-- As explained in the thread below, if 2 authentication are happening in parallel from the same user agent there can be a race condition.  
-  - tab1 is hitting the secured endpoint and receives a cookie with a state `s1`
-  - then tab2 is hiting the secured endpoint and receives a cookie with a state `s2`
-  - tab1 is authenticated against the IdP and redirected to the Kong gateway with a `state` query parameter `s1` while the cookie now contains the state `s2`   
-  https://github.com/zmartzone/lua-resty-openidc/issues/482#issuecomment-1582584374
-- user bookmark: the redirections of the login flow should happen in two steps. First from Kong to the OpenId Provider, then from the OP back to Kong. If the user has bookmarked the login page of the OP, the next time he tries to login his session might not be recognized by Kong.
+必須カラムは `schema.lua` の `required` フラグに対応する。デフォルト値がある場合、ユーザーが値を指定しなくてもデフォルトが適用される。
+
+### OIDC 基本設定
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.client_id` | | yes | OIDC クライアント ID |
+| `config.client_secret` | | yes | OIDC クライアントシークレット |
+| `config.discovery` | `https://.well-known/openid-configuration` | yes | OIDC ディスカバリエンドポイント |
+| `config.scope` | `openid` | yes | OAuth2 トークンスコープ。OIDC では `openid` 必須 |
+| `config.response_type` | `code` | yes | OAuth2 レスポンスタイプ |
+| `config.ssl_verify` | `no` | yes | OIDC Provider への SSL 検証を有効化 |
+| `config.token_endpoint_auth_method` | `client_secret_post` | yes | トークンエンドポイントの認証方式 |
+| `config.timeout` | | no | OIDC エンドポイント呼び出しのタイムアウト |
+| `config.redirect_uri` | | no | 認証成功後に OP がリダイレクトする URI |
+| `config.recovery_page_path` | | no | エラー時（401 以外）のリダイレクト先 |
+
+### 認証動作制御
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.unauth_action` | `auth` | no | 未認証時の動作。`auth`: ログインページにリダイレクト、`deny`: 401 を返す |
+| `config.bearer_only` | `no` | yes | イントロスペクションのみ（リダイレクトなし） |
+| `config.realm` | `kong` | yes | `WWW-Authenticate` ヘッダーの realm |
+| `config.filters` | | no | 認証をバイパスするパスのパターン |
+| `config.ignore_auth_filters` | | no | 認証をバイパスするエンドポイントのカンマ区切りリスト |
+| `config.skip_already_auth_requests` | `no` | no | 上位プラグインで認証済みのリクエストをスキップ |
+
+### イントロスペクション
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.introspection_endpoint` | | no | トークンイントロスペクションエンドポイント |
+| `config.introspection_endpoint_auth_method` | | no | イントロスペクション認証方式。`client_secret_basic` / `client_secret_post` |
+| `config.introspection_cache_ignore` | `no` | yes | イントロスペクション結果のキャッシュを無視 |
+| `config.use_jwks` | `no` | yes | イントロスペクション時に JWKS による JWT 検証を使用 |
+| `config.validate_scope` | `no` | yes | スコープ検証を有効化 |
+
+### Bearer JWT 認証
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.bearer_jwt_auth_enable` | `no` | no | Authorization ヘッダーの Bearer JWT を JWKS で検証。iss, sub, aud, exp, iat を検証 |
+| `config.bearer_jwt_auth_allowed_auds` | | no | JWT の `aud` 許可値リスト。未指定時は `client_id` を使用 |
+| `config.bearer_jwt_auth_signing_algs` | `["RS256"]` | yes | 許可する署名アルゴリズムのリスト |
+
+### セッション設定
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.cookie_name` | | no | セッション Cookie 名 |
+| `config.encryption_secret` | | yes | セッション暗号化の鍵導出に使用するシークレット |
+| `config.session_idling_timeout` | `0` | no | アイドルタイムアウト（秒）。`0` で無効 |
+| `config.session_rolling_timeout` | `0` | no | ローリングタイムアウト（秒）。`0` で無効 |
+| `config.session_absolute_timeout` | `0` | no | 絶対タイムアウト（秒）。`0` で無効 |
+| `config.session_remember_rolling_timeout` | `0` | no | 永続セッションのローリングタイムアウト（秒） |
+| `config.session_remember_absolute_timeout` | `0` | no | 永続セッションの絶対タイムアウト（秒） |
+| `config.session_storage` | `cookie` | yes | セッションストレージ。`cookie` または `redis` |
+| `config.session_redis_host` | `127.0.0.1` | no | Redis ホスト |
+| `config.session_redis_port` | `6379` | no | Redis ポート |
+| `config.session_redis_password` | | no | Redis パスワード |
+| `config.session_redis_database` | `0` | no | Redis データベース番号 |
+| `config.session_redis_ssl` | `no` | no | Redis への SSL 接続 |
+
+### ログアウト設定
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.logout_path` | `/logout` | no | ログアウトパス |
+| `config.redirect_after_logout_uri` | `/` | no | ログアウト後のリダイレクト先 |
+| `config.redirect_after_logout_with_id_token_hint` | `no` | no | ログアウト時に `id_token_hint` パラメータを送信 |
+| `config.post_logout_redirect_uri` | | no | OP のログアウト後リダイレクト先 |
+| `config.revoke_tokens_on_logout` | `no` | no | ログアウト時にトークンを失効させる |
+
+### ヘッダー注入設定
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.userinfo_header_name` | `X-USERINFO` | no | ユーザー情報ヘッダー名 |
+| `config.id_token_header_name` | `X-ID-Token` | no | ID トークンヘッダー名 |
+| `config.access_token_header_name` | `X-Access-Token` | no | アクセストークンヘッダー名 |
+| `config.access_token_as_bearer` | `no` | no | アクセストークンを Bearer 形式で送信 |
+| `config.disable_userinfo_header` | `no` | no | ユーザー情報ヘッダーを無効化 |
+| `config.disable_id_token_header` | `no` | no | ID トークンヘッダーを無効化 |
+| `config.disable_access_token_header` | `no` | no | アクセストークンヘッダーを無効化 |
+| `config.groups_claim` | `groups` | no | トークンからグループ情報を取得するクレーム名 |
+| `config.header_names` | `[]` | yes | カスタムヘッダー名リスト。`header_claims` と同数の要素が必要 |
+| `config.header_claims` | `[]` | yes | カスタムヘッダーのソースとなるクレーム名リスト |
+
+### プロキシ・デバッグ設定
+
+| パラメータ | デフォルト | 必須 | 説明 |
+|-----------|----------|------|------|
+| `config.http_proxy` | | no | HTTP プロキシ URL |
+| `config.https_proxy` | | no | HTTPS プロキシ URL（`http://proxy` 形式のみ対応） |
+| `config.openidc_debug_log_level` | `ngx.DEBUG` | no | lua-resty-openidc のログレベル。`ngx.DEBUG` / `ngx.INFO` / `ngx.WARN` / `ngx.ERR` |
+
+---
+
+## 上流リクエストへのヘッダー注入
+
+認証成功時、プラグインは以下のヘッダーをバックエンドに注入する:
+
+- `X-USERINFO`: ユーザー情報（Base64 エンコード JSON）
+- `X-Access-Token`: アクセストークン（生トークン文字列、または `access_token_as_bearer=yes` で `Bearer <token>` 形式）
+- `X-ID-Token`: ID トークン（Base64 エンコード JSON）
+- `X-Credential-Identifier`: ユーザーの `sub` クレーム
+
+Kong の認証情報として `kong.client.authenticate()` が呼ばれ、以下が設定される:
+
+```lua
+credential = {
+    id = "sub クレームの値",
+    username = "preferred_username クレームの値"
+}
+```
+
+グループ情報はトークンの `groups` クレーム（設定変更可能）から取得し、`kong.ctx.shared.authenticated_groups` に設定される。Kong の認可プラグインで利用可能。
+
+### JWT クレームをカスタムヘッダーにマッピング
+
+`header_names` と `header_claims` を使い、トークン内の任意のクレームをバックエンド向けヘッダーとして注入できる。両パラメータは同数の要素が必要で、位置で対応付けられる。
+
+設定例（`kong.yml` 抜粋）:
+
+```yaml
+# kong.yml
+services:
+- host: upstream-service
+  plugins:
+  - name: oidc
+    config:
+      client_id: foo
+      client_secret: secret
+      discovery: http://keycloak/realms/master/.well-known/openid-configuration
+      header_claims: ["email",        "name",        "realm_access.roles"]
+      header_names:  ["x-oidc-email", "x-oidc-name", "x-oidc-roles"     ]
+```
+
+Keycloak が発行する JWT ペイロードの例:
+
+```json
+{
+  "sub": "a6a78d91-5494-4ce3-9555-878a185ca4b9",
+  "email": "alice@example.com",
+  "name": "Alice Smith",
+  "preferred_username": "alice",
+  "realm_access": {
+    "roles": ["admin", "user"]
+  }
+}
+```
+
+バックエンドが受け取るリクエストヘッダー:
+
+```
+x-oidc-email: alice@example.com
+x-oidc-name: Alice Smith
+x-oidc-roles: admin, user
+```
+
+テーブル型のクレーム値（`roles` 等）はカンマ区切り文字列に自動変換される。クレームのソースは認証方式により異なる（Authorization Code: `user` / `id_token`、Bearer JWT / Introspection: トークンクレーム直接）。
+
+### アクセストークンを Bearer トークンとして転送
+
+バックエンドにアクセストークンを標準の Bearer トークンとして転送する場合:
+
+| パラメータ | 値 |
+|-----------|---|
+| `config.access_token_header_name` | `Authorization` |
+| `config.access_token_as_bearer` | `yes` |
+
+---
+
+## セッションのカスタマイズ
+
+### セッションタイムアウトの振る舞い
+
+lua-resty-session v4 の3種のタイムアウトは独立して評価され、いずれか1つでも超過するとセッションが無効になる。
+
+| タイムアウト | 起点 | リクエスト時のリセット | 用途 |
+|------------|------|---------------------|------|
+| idling | 最後のリクエスト | リセットされる | 一定時間操作がないユーザーをログアウト |
+| rolling | セッション作成 | リセットされる（上限あり） | セッションの定期的な更新を強制 |
+| absolute | セッション作成 | リセットされない | セッションの最大寿命を制限 |
+
+`remember_*` は「ログイン状態を保持する」永続セッション（ブラウザを閉じても維持）に適用される。通常セッションには `idling` / `rolling` / `absolute` が適用される。
+
+設定の組み合わせ例（`kong.yml` 抜粋）:
+
+```yaml
+# kong.yml
+services:
+- plugins:
+  - name: oidc
+    config:
+      # 例1: 30分アイドル + 24時間上限
+      #   操作し続ければ24時間有効、30分放置で期限切れ
+      session_idling_timeout: 1800
+      session_absolute_timeout: 86400
+
+      # 例2: 1時間ローリング + 8時間上限
+      #   1時間ごとにセッションが更新され、最長8時間で強制終了
+      # session_rolling_timeout: 3600
+      # session_absolute_timeout: 28800
+
+      # 例3: 全て無効（デフォルト）
+      #   セッションは無期限（ブラウザを閉じるまで有効）
+      # session_idling_timeout: 0
+      # session_rolling_timeout: 0
+      # session_absolute_timeout: 0
+```
+
+動作シナリオ（例1: idling=1800, absolute=86400）:
+
+| 時刻 | イベント | idling 残り | absolute 残り | 結果 |
+|------|---------|-----------|-------------|------|
+| 0:00 | ログイン | 30分 | 24時間 | セッション開始 |
+| 0:10 | リクエスト | 30分（リセット） | 23時間50分 | 有効 |
+| 0:50 | （操作なし） | 0分 | 23時間10分 | **idling で期限切れ → 再認証** |
+| | | | | |
+| 0:00 | ログイン | 30分 | 24時間 | セッション開始 |
+| ... | 30分以内にリクエストが継続 | 30分（都度リセット） | 減少し続ける | 有効 |
+| 23:50 | リクエスト | 30分（リセット） | 10分 | 有効 |
+| 24:00 | リクエスト | 20分 | 0分 | **absolute で期限切れ → 再認証** |
+
+---
+
+## フォーク独自の改善点
+
+**来歴**: [Nokia/kong-oidc](https://github.com/nokia/kong-oidc)（2019年サポート終了）→ [revomatico/kong-oidc](https://github.com/revomatico/kong-oidc)（2024年アーカイブ）→ [julien-sarik/kong-oidc](https://github.com/julien-sarik/kong-oidc) → [suwa-sh/kong-plugin-oidc](https://github.com/suwa-sh/kong-plugin-oidc)（本リポジトリ）
+
+### julien-sarik/kong-oidc
+
+- Kong 3.9 / lua-resty-openidc 1.8.0 / lua-resty-session 4.0.5 への移行
+- セッションタイムアウト5種の設定対応（idling / rolling / absolute / remember rolling / remember absolute）。デフォルト `0`（無効）で、resty-session の 15 分アイドルタイムアウト問題を回避
+- `session_contents` 制御による user-info エンドポイント呼び出しの無効化（ID トークンに必要な情報が含まれているため）
+- `openidc_debug_log_level` パラメータによる lua-resty-openidc のログレベル制御
+- Podman による Kong + Keycloak + Traefik + MockServer のコンテナ構成整備
+
+### suwa-sh/kong-plugin-oidc
+
+- Redis セッションストレージ対応（Cookie の ~4KB 制限回避、マルチノードでのセッション共有）
+- `setCredentials` の変異バグ修正（参照コピー → 浅いコピー）
+- 静的解析、テスト、ドキュメントの拡充
+
+## OpenID Connect スコープとクレーム
+
+| スコープ | クレーム |
+|---------|---------|
+| `openid` | `sub`。ID トークンには `iss`, `aud`, `exp`, `iat` も含まれる |
+| `profile` | `name`, `family_name`, `given_name`, `middle_name`, `preferred_username`, `nickname`, `picture`, `updated_at` |
+| `email` | `email`, `email_verified` |
+
+`openid` スコープは必須。
+
+## トラブルシューティング
+
+### `request to the redirect_uri path, but there's no session state found`
+
+Cookie からセッションを取得できない場合に発生する。主な原因:
+
+- **redirect URI の設定誤り**: Kong が公開するルートと同じ URI を設定すると、認可サーバーへのリダイレクト前にこのエンドポイントに直接アクセスしてしまう
+- **スキーム不一致**: HTTP でフローを開始し、redirect URI が HTTPS の場合、Cookie が送信されない
+- **セッションシークレットの不一致**: `encryption_secret` は必須パラメータだが、マルチノード構成で各ノードに異なる値を設定すると、他のノードが暗号化したセッションを復号できない。全ノードで同一の値を設定すること
+- **SameSite Cookie 属性**: `Lax` または `None` に設定すべき（`Strict` ではリンクからのアクセス時に Cookie が送信されない）
+- **ヘッダーサイズ制限**（Cookie モード時のみ）: Cookie にトークンが含まれるため、Kong の前段にリバースプロキシがある場合に切り詰められる可能性がある。Redis ストレージ使用時は Cookie にセッション ID のみ格納されるため該当しない
+- **セッションタイムアウト**: 本フォークではデフォルト `0`（無効）だが、`session_idling_timeout` / `session_rolling_timeout` / `session_absolute_timeout` を明示的に設定している場合、認証フロー中（OP でのログイン操作中）にいずれかのタイムアウトを超過するとセッションが無効になり発生する
+- **ブックマーク**: OP のログインページをブックマークしている場合、次回ログイン時にセッションが認識されない可能性がある（[schema.lua](kong/plugins/oidc/schema.lua) のタイムアウト設定を参照）
+
+### `state from argument: xxx does not match state restored from session: yyy`
+
+- **並行認証の競合**: 同一ブラウザの複数タブで同時に認証すると、state の競合が発生する
+  - tab1 が保護エンドポイントにアクセスし、state `s1` を含む Cookie を受け取る
+  - tab2 が同じエンドポイントにアクセスし、Cookie が state `s2` で上書きされる
+  - tab1 が OP で認証後、state パラメータ `s1` で Kong にリダイレクトされるが、Cookie には `s2` が格納されている
+  - 参照: [lua-resty-openidc#482](https://github.com/zmartzone/lua-resty-openidc/issues/482#issuecomment-1582584374)
+- **ブックマーク**: OP のログインページをブックマークしている場合、次回ログイン時にセッションが認識されない可能性がある

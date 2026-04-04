@@ -3,8 +3,10 @@
 
 ## 背景
 
-- Keycloak の OIDC トークンは 60s で expire する仕様
-- OIDC 認証後に HTTP セッションを発行し、30分スライディングウィンドウ / 24h 強制終了で管理したい
+- 想定する環境でのKeycloakは外部提供で設定を変更できない。
+  - OIDC トークンは 60s で expire する仕様
+- RP側で再認証タイミングをコントロールする必要がある
+  - OIDC 認証後に HTTP セッションを発行し、30分スライディングウィンドウ / 24h 強制終了を想定
 - JWT payload のサイズを考慮すると Cookie のみ（~4KB制限）では不十分 → Redis セッションが必須
 
 ## 採用プラグイン
@@ -58,13 +60,15 @@
 
 ### 5. C4 Model でアーキテクチャ整理
 
-- [ ] Context図: システム全体の境界と外部アクター（ユーザー、Keycloak、upstream サービス）
-- [ ] Container図: Kong / OIDC Plugin / Redis / Keycloak の関係と通信フロー
-- [ ] Component図: プラグイン内部の構成（handler / utils / filter / schema / lua-resty-session / lua-resty-openidc）
-- [ ] 認証・セッションのシーケンス図
-  - 初回認証フロー（OIDC Authorization Code Flow → セッション発行 → Redis 保存）
-  - セッション有効時のリクエストフロー（Redis 参照 → タイムアウト検証 → upstream 転送）
-  - セッション期限切れ時のフロー（Redis 参照 → 無効判定 → Keycloak 再認証リダイレクト）
+- [x] Context図: システム全体の境界と外部アクター（ユーザー、Keycloak、upstream サービス、Redis）
+- [x] Container図: Kong / OIDC Plugin / Traefik / Keycloak / MockServer / Redis の関係と通信フロー
+- [x] Component図: プラグイン内部の構成（handler / utils / filter / schema / lua-resty-openidc / lua-resty-session / jwt-validators）
+- [x] シーケンス図（5フロー、`docs/architecture.md`）
+  - 4a: 初回認証フロー（Authorization Code Flow → セッション発行 → Redis 保存）
+  - 4b: 認証済みリクエスト（セッション有効 → タイムアウト検証 → upstream 転送）
+  - 4c: セッション期限切れ（無効判定 → Keycloak 再認証リダイレクト）
+  - 4d: Bearer JWT 認証フロー（JWKS でのJWT検証）
+  - 4e: エラーフロー（401/403/500 の分岐）
 
 ### 6. テスト方針策定
 
