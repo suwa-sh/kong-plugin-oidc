@@ -107,6 +107,12 @@ function M.get_options(config, ngx)
       absolute_timeout = config.session_absolute_timeout,
       remember_rolling_timeout = config.session_remember_rolling_timeout,
       remember_absolute_timeout = config.session_remember_absolute_timeout,
+      storage = config.session_storage,
+      redis_host = config.session_redis_host,
+      redis_port = config.session_redis_port,
+      redis_password = config.session_redis_password,
+      redis_database = config.session_redis_database,
+      redis_ssl = config.session_redis_ssl == "yes",
     },
   }
 end
@@ -169,7 +175,10 @@ function M.injectIDToken(idToken, headerName)
 end
 
 function M.setCredentials(user)
-  local tmp_user = user
+  local tmp_user = {}
+  for k, v in pairs(user) do
+    tmp_user[k] = v
+  end
   tmp_user.id = user.sub
   tmp_user.username = user.preferred_username
   set_consumer(nil, tmp_user)

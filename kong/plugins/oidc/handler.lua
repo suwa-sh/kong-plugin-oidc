@@ -1,5 +1,5 @@
 local OidcHandler = {
-    VERSION = "1.3.0",
+    VERSION = "1.5.0",
     PRIORITY = 1000,
 }
 local utils = require("kong.plugins.oidc.utils")
@@ -143,6 +143,18 @@ function make_oidc(oidcConfig)
     remember_rolling_timeout = oidcConfig.session_opts.remember_rolling_timeout,
     remember_absolute_timeout = oidcConfig.session_opts.remember_absolute_timeout,
   }
+
+  if oidcConfig.session_opts.storage == "redis" then
+    session_config.storage = "redis"
+    session_config.redis = {
+      host = oidcConfig.session_opts.redis_host,
+      port = oidcConfig.session_opts.redis_port,
+      password = oidcConfig.session_opts.redis_password,
+      database = oidcConfig.session_opts.redis_database,
+      ssl = oidcConfig.session_opts.redis_ssl,
+    }
+  end
+
   local res, err = require("resty.openidc").authenticate(oidcConfig, ngx.var.request_uri, unauth_action, session_config)
 
   if err then
