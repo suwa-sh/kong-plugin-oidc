@@ -12,3 +12,8 @@ read_globals = {
 
 -- Ignore line length (Kong plugins tend to have long lines)
 max_line_length = false
+
+-- テストファイルでは ngx/kong の書き換えを許可
+files["spec/**/*_spec.lua"] = {
+  globals = { "ngx", "kong" },
+}

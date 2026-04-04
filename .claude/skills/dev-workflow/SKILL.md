@@ -75,10 +75,20 @@ luacheck kong/
 - コード変更を伴うタスクでは、ビルドが通ることを確認する
 
 ```bash
+# ユニットテスト
+busted spec/unit/
+
+# カバレッジ計測（コード変更を伴うタスクで実施）
+busted --coverage spec/unit/
+luacov kong/plugins/oidc/
+# luacov.report.out の Summary でファイル別・全体のカバレッジを確認
+# 閾値: ファイル別 95% 以上、全体 95% 以上（詳細は docs/test-strategy.md 3.3）
+
+# ビルド確認
 docker build -t kong:kong-oidc .
 ```
 
-**ループ条件**: テスト/ビルドが全て通るまで修正して再実行。
+**ループ条件**: テスト/ビルドが全て通り、カバレッジが閾値以上になるまで修正して再実行。
 
 ### 7. 完了条件ゲート
 
