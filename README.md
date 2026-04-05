@@ -30,53 +30,21 @@ export KONG_PLUGINS=bundled,oidc
 
 Kong イメージのビルド（OIDC プラグイン同梱）:
 ```bash
-podman build -t kong:kong-oidc .
+docker build -t kong:kong-oidc .
 ```
 
-Podman ネットワーク作成:
+### E2E テスト（Keycloak + Redis + Kong x2）
+
 ```bash
-podman network create foo
+bash spec/e2e/run-e2e.sh
 ```
 
-Kong, Keycloak, HTTP モック（バックエンド役）を起動:
-```bash
-podman play kube pods.yml --net foo
-```
+詳細は [spec/e2e/README.md](spec/e2e/README.md) を参照。
 
-HTTP モックの設定（Kong が中継したヘッダーを返すよう設定）:
-```bash
-curl -v -X PUT "http://localhost:1080/mockserver/expectation" -d '{
-    "httpRequest": {
-        "path": "/"
-    },
-    "httpResponseTemplate": {
-        "template": "{ \"statusCode\": 200, \"body\": \"$!request.headers\" }",
-        "templateType": "VELOCITY"
-    }
-}'
-```
+### 設定例
 
-`keycloak-client.json` を Keycloak 管理画面（`http://localhost:8080/admin/master/console/#/master/clients`）からインポートする。
-
-保護されたリソースにアクセス:
-```
-http://localhost:8000/some/path
-```
-
-Prometheus メトリクス:
-```
-http://localhost:8001/metrics
-```
-
-ログアウト:
-```
-http://localhost:8000/logout
-```
-
-停止:
-```bash
-podman play kube pods.yml --down
-```
+`kong.yml` に Cookie モードの設定例、`spec/e2e/fixtures/kong-e2e.yml` に Redis セッションモードの設定例がある。
+Keycloak クライアント設定は `keycloak-client.json` を Admin Console からインポートする。
 
 ## 設定パラメータ
 
