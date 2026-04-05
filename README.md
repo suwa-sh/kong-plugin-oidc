@@ -16,9 +16,13 @@
 
 ## インストール
 
+Docker イメージにプラグインを同梱する方法（推奨）:
+
 ```bash
-luarocks install kong-oidc
+docker build -t kong:kong-oidc .
 ```
+
+Dockerfile 内で `luarocks make` により rockspec からビルド・インストールされる。
 
 `KONG_PLUGINS` 環境変数に `oidc` を追加:
 
