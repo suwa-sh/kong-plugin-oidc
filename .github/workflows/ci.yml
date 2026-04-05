@@ -13,10 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install qlty
+        uses: qltysh/qlty-action/install@main
+
       - name: Run qlty check
-        uses: qltysh/qlty-action@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: qlty check --all
 
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
