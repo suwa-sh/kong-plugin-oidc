@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run qlty check
+        uses: qltysh/qlty-check@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install luacheck
+        run: luarocks install luacheck
+
+      - name: Run luacheck
+        run: luacheck kong/
+
+  unit-test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install test dependencies
+        run: luarocks install busted && luarocks install luacov
+
+      - name: Run unit tests with coverage
+        run: busted --coverage spec/unit/
+
+      - name: Check coverage threshold
+        run: |
+          luacov kong/plugins/oidc/
+          echo "--- Coverage Report ---"
+          tail -20 luacov.report.out
+          # Summary の Total 行からカバレッジ率を抽出
+          COVERAGE=$(awk '/^Total/{getline; print $NF}' luacov.report.out | tr -d '%')
+          echo "Coverage: ${COVERAGE}%"
+          if [ "$(echo "$COVERAGE < 95" | bc -l)" -eq 1 ]; then
+            echo "ERROR: Coverage ${COVERAGE}% is below 95% threshold"
+            exit 1
+          fi
+
+  integration-test:
+    needs: unit-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install PyJWT requests cryptography
+
+      - name: Run integration tests
+        run: bash spec/integration/run-tests.sh
+
+  e2e-test:
+    needs: integration-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run E2E tests
+        run: bash spec/e2e/run-e2e.sh
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t kong-plugin-oidc:ci .

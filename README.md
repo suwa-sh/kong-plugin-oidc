@@ -1,6 +1,6 @@
 # kong-oidc
 
-## 概要
+[![CI](https://github.com/suwa-sh/kong-plugin-oidc/actions/workflows/ci.yml/badge.svg)](https://github.com/suwa-sh/kong-plugin-oidc/actions/workflows/ci.yml)
 
 [Kong](https://github.com/Kong/kong) 用の [OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) Relying Party (RP) プラグイン。
 
@@ -8,47 +8,74 @@
 
 ディスカバリドキュメントとアクセストークンのサーバーワイドキャッシュに対応。OAuth/OpenID Connect を終端するリバースプロキシとして、バックエンドサービス側での認証実装を不要にする。
 
-アーキテクチャの詳細は [docs/architecture.md](docs/architecture.md) を参照。
+## クイックスタート
 
-## 依存関係
+GHCR の公開イメージで Keycloak + Redis 環境を試す:
 
-- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/) ~> 1.8.0
+```bash
+cd examples
+docker compose up -d
+```
 
-## インストール
+Keycloak 管理画面（`http://localhost:8080`、admin/admin）でテストユーザーとクライアントを作成後、
+`http://localhost:8000/some/path` にアクセスすると OIDC 認証フローが開始される。
 
-Docker イメージにプラグインを同梱する方法（推奨）:
+詳細は [examples/](examples/) を参照。
+
+## Docker イメージ
+
+```bash
+docker pull ghcr.io/suwa-sh/kong-plugin-oidc:latest
+```
+
+| タグ | 内容 |
+|------|------|
+| `latest` | 最新ビルド |
+| `kong-3.11.0.8-1.6.0` | Kong 3.11.0.8 + プラグイン 1.6.0 |
+
+`KONG_PLUGINS` 環境変数に `oidc` を追加して使用する:
+
+```yaml
+environment:
+  KONG_PLUGINS: bundled,oidc
+```
+
+## 開発
+
+### ビルド
 
 ```bash
 docker build -t kong:kong-oidc .
 ```
 
-Dockerfile 内で `luarocks make` により rockspec からビルド・インストールされる。
-
-`KONG_PLUGINS` 環境変数に `oidc` を追加:
+Dockerfile は `ARG KONG_VERSION` でベースイメージを指定可能:
 
 ```bash
-export KONG_PLUGINS=bundled,oidc
+docker build --build-arg KONG_VERSION=3.9.1.2-ubuntu -t kong:kong-oidc .
 ```
 
-## ビルド・実行
-
-Kong イメージのビルド（OIDC プラグイン同梱）:
-```bash
-docker build -t kong:kong-oidc .
-```
-
-### E2E テスト（Keycloak + Redis + Kong x2）
+### テスト
 
 ```bash
+# 静的解析
+qlty check --all
+luacheck kong/
+
+# ユニットテスト
+busted spec/unit/
+
+# 統合テスト（Docker 必要）
+bash spec/integration/run-tests.sh
+
+# E2E テスト（Docker + Python 必要）
 bash spec/e2e/run-e2e.sh
 ```
 
-詳細は [spec/e2e/README.md](spec/e2e/README.md) を参照。
+### 依存関係
 
-### 設定例
+- [`lua-resty-openidc`](https://github.com/zmartzone/lua-resty-openidc/) ~> 1.8.0
 
-`kong.yml` に Cookie モードの設定例、`spec/e2e/fixtures/kong-e2e.yml` に Redis セッションモードの設定例がある。
-Keycloak クライアント設定は `keycloak-client.json` を Admin Console からインポートする。
+アーキテクチャの詳細は [docs/architecture.md](docs/architecture.md)、テスト戦略は [docs/test-strategy.md](docs/test-strategy.md) を参照。
 
 ## 設定パラメータ
 

@@ -1,0 +1,46 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract versions
+        id: versions
+        run: |
+          PLUGIN_VERSION="${GITHUB_REF_NAME#v}"
+          KONG_VERSION=$(grep 'KONG_VERSION=' Dockerfile | head -1 | sed 's/.*KONG_VERSION=//')
+          # ubuntu サフィックスを除去して Kong メジャー.マイナー.パッチを取得
+          KONG_SHORT=$(echo "$KONG_VERSION" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?')
+          echo "plugin=$PLUGIN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "kong=$KONG_SHORT" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/suwa-sh/kong-plugin-oidc:latest
+            ghcr.io/suwa-sh/kong-plugin-oidc:kong-${{ steps.versions.outputs.kong }}-${{ steps.versions.outputs.plugin }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

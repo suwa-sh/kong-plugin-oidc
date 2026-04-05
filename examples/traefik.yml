@@ -1,0 +1,13 @@
+http:
+  routers:
+    router0:
+      entryPoints:
+      - web
+      service: keycloak
+      rule: PathPrefix(`/realms`)
+  services:
+    keycloak:
+      loadBalancer:
+        servers:
+        - url: http://keycloak:8080
+        passHostHeader: true
