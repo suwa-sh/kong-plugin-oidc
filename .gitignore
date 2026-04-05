@@ -4,6 +4,7 @@
 .\#*
 lua_install
 luacov.stats.out
+luacov.report.out
 venv/
 bin/venv/
 **/__pycache__/

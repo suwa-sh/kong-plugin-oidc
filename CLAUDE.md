@@ -25,8 +25,11 @@ docker build -t kong:kong-oidc .
 qlty check --all
 luacheck kong/
 
-# テスト（busted セットアップ後）
+# ユニットテスト（busted セットアップ後）
 busted spec/unit/
+
+# 統合テスト（Docker Desktop + Python 3 + PyJWT 必要）
+bash spec/integration/run-tests.sh
 ```
 
 開発環境の詳細（コンテナ起動手順等）は [docs/memory.md](docs/memory.md) を参照。

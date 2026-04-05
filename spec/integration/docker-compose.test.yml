@@ -1,0 +1,54 @@
+services:
+  kong:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong-test.yml
+      KONG_PLUGINS: bundled,oidc
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_LOG_LEVEL: debug
+      KONG_NGINX_HTTP_LUA_SHARED_DICT: "discovery 1m; lua_shared_dict jwks 1m"
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./fixtures/kong-test.yml:/kong-test.yml:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      mockserver:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+
+  mockserver:
+    image: mockserver/mockserver:5.15.0
+    environment:
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/initializerJson.json
+      MOCKSERVER_LOG_LEVEL: WARN
+    volumes:
+      - ./fixtures/mockserver/initializerJson.json:/config/initializerJson.json:ro
+    ports:
+      - "1080:1080"
+    # mockserver:5.15.0 は distroless イメージ（curl/wget/sh なし）
+    # ヘルスチェックはホスト側の run-tests.sh で実施する
+    healthcheck:
+      disable: true

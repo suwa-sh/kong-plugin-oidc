@@ -1,0 +1,106 @@
+[
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/.well-known/openid-configuration"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"issuer\": \"http://mockserver:1080\", \"authorization_endpoint\": \"http://mockserver:1080/authorize\", \"token_endpoint\": \"http://mockserver:1080/token\", \"userinfo_endpoint\": \"http://mockserver:1080/userinfo\", \"jwks_uri\": \"http://mockserver:1080/certs\", \"introspection_endpoint\": \"http://mockserver:1080/token/introspect\", \"end_session_endpoint\": \"http://mockserver:1080/logout\", \"response_types_supported\": [\"code\"], \"subject_types_supported\": [\"public\"], \"id_token_signing_alg_values_supported\": [\"RS256\"], \"scopes_supported\": [\"openid\", \"profile\", \"email\"], \"token_endpoint_auth_methods_supported\": [\"client_secret_post\", \"client_secret_basic\"], \"claims_supported\": [\"sub\", \"iss\", \"aud\", \"exp\", \"iat\", \"preferred_username\", \"email\", \"groups\"]}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/certs"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"keys\": [{\"kty\": \"RSA\", \"alg\": \"RS256\", \"use\": \"sig\", \"kid\": \"test-key-1\", \"n\": \"tpfOaTcrGJig7S-wXIcRqzP17xbvvV0PUfV-YnqxTq9qvoZjBpUxEuN1kCIEjTVM6KDGQbFEkzOkI4QfHg9iN9KzDijcvnQGkQ04rA_2IpKewonDxIRGAmYmNCCll_50W1aKyAwGIqXHOZ6cB5qBuENs1Fqmt2Oap48i0uvvu57u12rrwei7amgfpYlMny6jA83jRO3VB7QK_7KkbNaiKyLMAYJgRR7_ks_zMtnhxwQttdUd2ldlClzXwIo8SbuFU9VBDfTlTgHu73FcWj0adoM-U6TvwkMO4vskRrrvz2ekmbMtbNyzvECSpNc0Qq4QtXiHzYIvu4ZOZ5YGG7eW0w\", \"e\": \"AQAB\"}]}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/token"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"access_token\": \"eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwOi8vbW9ja3NlcnZlcjoxMDgwIiwic3ViIjoidGVzdC11c2VyIiwiYXVkIjoidGVzdC1jbGllbnQiLCJleHAiOjIwOTA3MDMwODgsImlhdCI6MTc3NTM0MzA4OCwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdHVzZXIiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJncm91cHMiOlsiYWRtaW4iLCJ1c2VycyJdfQ.CSmMEjsSbWPHgzjX4v1sy2NduD73woZ6P7wDL43stKlWMNhgTTFOSycTT4-qEHoNQx8mTK0rzl2OTFZqZ1KnlGFmDalOJDKctI5DBXJpiesyNUSbs5vJ7RYvZzof47AKkak3Uy9iE_HCIOTF-NZf2P6c6ZVpZh8V9BFb9Jxk0xAlJE78knvvzPduJM9YvAex-ITXzMxWpAJNxgqr96nmIXb_H1l9qheqwQ5bYWNTZmvGkYrNOPtWQqVBATThtyYZcfS0B2y_Vta02rzp-g920mwvRdicaKimv3Ax0YlU5-L9Ygx-0L_mnLgJt60XLR3hJ0sxuivIQBw_JIACnGSvMA\", \"id_token\": \"eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2V5LTEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwOi8vbW9ja3NlcnZlcjoxMDgwIiwic3ViIjoidGVzdC11c2VyIiwiYXVkIjoidGVzdC1jbGllbnQiLCJleHAiOjIwOTA3MDMwODgsImlhdCI6MTc3NTM0MzA4OCwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdHVzZXIiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJncm91cHMiOlsiYWRtaW4iLCJ1c2VycyJdfQ.CSmMEjsSbWPHgzjX4v1sy2NduD73woZ6P7wDL43stKlWMNhgTTFOSycTT4-qEHoNQx8mTK0rzl2OTFZqZ1KnlGFmDalOJDKctI5DBXJpiesyNUSbs5vJ7RYvZzof47AKkak3Uy9iE_HCIOTF-NZf2P6c6ZVpZh8V9BFb9Jxk0xAlJE78knvvzPduJM9YvAex-ITXzMxWpAJNxgqr96nmIXb_H1l9qheqwQ5bYWNTZmvGkYrNOPtWQqVBATThtyYZcfS0B2y_Vta02rzp-g920mwvRdicaKimv3Ax0YlU5-L9Ygx-0L_mnLgJt60XLR3hJ0sxuivIQBw_JIACnGSvMA\", \"token_type\": \"Bearer\", \"expires_in\": 3600, \"scope\": \"openid\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/token/introspect"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"active\": true, \"sub\": \"test-user\", \"client_id\": \"test-client\", \"scope\": \"openid\", \"preferred_username\": \"testuser\", \"email\": \"test@example.com\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/authorize"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "text/html"
+        ]
+      },
+      "body": "Mock Authorization Page"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/userinfo"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"sub\": \"test-user\", \"preferred_username\": \"testuser\", \"email\": \"test@example.com\", \"groups\": [\"admin\", \"users\"]}"
+    }
+  },
+  {
+    "httpRequest": {
+      "path": "/test/.*"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": [
+          "application/json"
+        ]
+      },
+      "body": "{\"status\": \"ok\", \"upstream\": true}"
+    }
+  }
+]

@@ -97,6 +97,14 @@ docker build -t kong:kong-oidc .
 - 全条件を満たすまで修正をループする
 - 条件を満たせない場合はユーザーに相談する
 
+加えて、バンドルスクリプトによるドキュメント同期チェックを実行する:
+
+```bash
+bash .claude/skills/dev-workflow/scripts/check-test-doc-sync.sh
+```
+
+テストスクリプトと README.md のテストケース ID が一致しない場合はエラーになる。テストケースを追加・削除した場合は README.md も更新すること。
+
 ### 8. codex レビューゲート
 
 codex によるレビューを実施する。

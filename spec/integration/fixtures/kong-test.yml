@@ -1,0 +1,142 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # Route 1: Standard OIDC (Auth Code flow) with Redis session
+  - name: standard-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: standard-route
+        paths: ["/test/standard"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          session_storage: redis
+          session_redis_host: redis
+          session_redis_port: 6379
+          openidc_debug_log_level: "ngx.DEBUG"
+
+  # Route 2: Filter path (bypass auth)
+  - name: filtered-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: filtered-route
+        paths: ["/test/filtered"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          filters: "/test/filtered/health,/test/filtered/metrics"
+
+  # Route 3: Bearer JWT auth enabled
+  - name: bearer-jwt-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: bearer-jwt-route
+        paths: ["/test/bearer-jwt"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          bearer_jwt_auth_enable: "yes"
+
+  # Route 4: bearer_only mode
+  - name: bearer-only-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: bearer-only-route
+        paths: ["/test/bearer-only"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          bearer_only: "yes"
+          introspection_endpoint: http://mockserver:1080/token/introspect
+
+  # Route 5: unauth_action=deny
+  - name: deny-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: deny-route
+        paths: ["/test/deny"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          unauth_action: deny
+
+  # Route 6: Custom headers (bearer JWT + header mapping)
+  - name: custom-headers-oidc
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: custom-headers-route
+        paths: ["/test/custom-headers"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          bearer_jwt_auth_enable: "yes"
+          header_names: ["X-User-Email", "X-User-Name"]
+          header_claims: ["email", "preferred_username"]
+
+  # Route 7: Log level WARN (combined with Route 1 DEBUG for I-15 test)
+  - name: log-level-warn
+    host: mockserver
+    port: 1080
+    path: /
+    protocol: http
+    routes:
+      - name: log-warn-route
+        paths: ["/test/log-warn"]
+        strip_path: false
+    plugins:
+      - name: oidc
+        config:
+          client_id: test-client
+          client_secret: test-secret
+          discovery: http://mockserver:1080/.well-known/openid-configuration
+          encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
+          openidc_debug_log_level: "ngx.WARN"

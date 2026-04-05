@@ -85,16 +85,13 @@
 
 ### 7. テスト整備
 
-> 詳細な実装計画は [plan-テスト実装.md](plan-テスト実装.md) を参照。実装完了後に削除する。
-
-- [ ] ユニットテストの追加（上流 fork にはテストなし）
-  - セッションタイムアウト検証
-  - Redis ストレージ設定の反映確認
-- [ ] 統合テスト（Kong + Keycloak + Redis）
-  - OIDC 認証 → セッション発行フロー
-  - 30分アイドルタイムアウト
-  - 24h 絶対タイムアウト
-  - セッション切れ → 再認証リダイレクト
+- [x] ユニットテストの追加（上流 fork にはテストなし）
+  - filter_spec 7件、utils_spec 31件、handler_spec 27件（計65件）
+  - カバレッジ 98.81%（閾値 95% を設定済み）
+- [x] 統合テスト（Kong + MockServer + Redis）
+  - Group A: ステートレステスト 9件（プラグインロード、フィルタ、302リダイレクト、Bearer JWT、bearer_only、deny、ログレベル、Redis停止）
+  - Group B: Auth Code フロー完了テスト 6件（Redis セッション保存、Cookie サイズ、ヘッダー注入、カスタムヘッダー、Cookie 改ざん、skip_already_auth）
+  - テストケース一覧: [spec/integration/README.md](../spec/integration/README.md)
 
 ### 8. 動作確認
 
