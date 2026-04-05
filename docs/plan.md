@@ -100,11 +100,12 @@
   - セッション Cookie 発行: ✅
   - 無効/なしトークン拒否 (401): ✅
   - 新スキーマフィールドのデフォルト値: ✅
-- [ ] Keycloak で OIDC token 60s expire 設定
-- [ ] セッション設定: idling=1800, absolute=86400
-- [ ] Redis にセッションデータが保存されることを確認
-- [ ] Cookie には session ID のみ格納されることを確認
-- [ ] マルチノード構成でのセッション共有確認（k3d で複数 Kong レプリカを構成）
+- [x] Keycloak で OIDC token 60s expire 設定（E2E-01: realm accessTokenLifespan=60 確認済み）
+- [x] セッション設定: idling=1800, absolute=86400（E2E-02: Kong Admin API で確認済み）
+- [x] Redis にセッションデータが保存されることを確認（E2E-03: DBSIZE > 0, TTL 有限）
+- [x] Cookie には session ID のみ格納されることを確認（E2E-04: 114 bytes < 200 bytes）
+- [x] マルチノード構成でのセッション共有確認（E2E-05: Docker Compose 2台構成で Kong-1 ログイン → Kong-2 セッション有効）
+  - テストケース一覧: [spec/e2e/README.md](../spec/e2e/README.md)
 
 ## 設定例（完成イメージ）
 

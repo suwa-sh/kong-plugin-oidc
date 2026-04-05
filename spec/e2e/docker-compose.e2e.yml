@@ -1,0 +1,93 @@
+services:
+  kong-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment: &kong-env
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong-e2e.yml
+      KONG_PLUGINS: bundled,oidc
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_LOG_LEVEL: debug
+      KONG_NGINX_HTTP_LUA_SHARED_DICT: "discovery 1m; lua_shared_dict jwks 1m"
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: "64 160k"
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes: &kong-volumes
+      - ./fixtures/kong-e2e.yml:/kong-e2e.yml:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      mockserver:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  kong-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment: *kong-env
+    volumes: *kong-volumes
+    ports:
+      - "8002:8000"
+      - "8003:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      mockserver:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    command: start-dev --health-enabled=true
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_URL: http://keycloak:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+
+  mockserver:
+    image: mockserver/mockserver:5.15.0
+    environment:
+      MOCKSERVER_LOG_LEVEL: WARN
+    ports:
+      - "1080:1080"
+    healthcheck:
+      disable: true
