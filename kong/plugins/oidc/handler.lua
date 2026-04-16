@@ -1,11 +1,25 @@
 local OidcHandler = {
-    VERSION = "1.6.0",
+    VERSION = "1.6.1",
     PRIORITY = 1000,
 }
 -- luacheck: ignore 212/self
 local utils = require("kong.plugins.oidc.utils")
 local filter = require("kong.plugins.oidc.filter")
 local handle, make_oidc, introspect, verify_bearer_jwt
+
+-- Build a sources table that excludes nil values.
+-- Lua の { nil, x } のようなテーブルリテラルは nil ホールを生成し
+-- `#t` の結果が未定義になるため、nil を除外したテーブルを明示的に構築する。
+local function non_nil_sources(...)
+  local sources = {}
+  for i = 1, select("#", ...) do
+    local v = select(i, ...)
+    if v then
+      sources[#sources + 1] = v
+    end
+  end
+  return sources
+end
 
 function OidcHandler:configure(configs)
   -- Map openidc debug log level to configured Nginx log level
@@ -112,7 +126,7 @@ handle = function(oidcConfig)
       elseif response.id_token then
         utils.injectGroups(response.id_token, oidcConfig.groups_claim)
       end
-      utils.injectHeaders(oidcConfig.header_names, oidcConfig.header_claims, { response.user, response.id_token })
+      utils.injectHeaders(oidcConfig.header_names, oidcConfig.header_claims, non_nil_sources(response.user, response.id_token))
       if (not oidcConfig.disable_userinfo_header
           and response.user) then
         utils.injectUser(response.user, oidcConfig.userinfo_header_name)
