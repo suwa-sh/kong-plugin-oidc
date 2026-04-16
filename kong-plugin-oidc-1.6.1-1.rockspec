@@ -1,5 +1,5 @@
 package = "kong-plugin-oidc"
-version = "1.6.0-1"
+version = "1.6.1-1"
 source = {
     url = "git://github.com/suwa-sh/kong-plugin-oidc",
     tag = "main",

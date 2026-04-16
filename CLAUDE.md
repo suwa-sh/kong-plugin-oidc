@@ -65,4 +65,4 @@ kong-plugin-oidc (PRIORITY: 1000)
 
 ## パッケージ管理
 
-LuaRocksで管理。`kong-plugin-oidc-1.6.0-1.rockspec`がビルド定義。Dockerfile内で`luarocks make`実行。
+LuaRocksで管理。`kong-plugin-oidc-1.6.1-1.rockspec`がビルド定義。Dockerfile内で`luarocks make`実行。

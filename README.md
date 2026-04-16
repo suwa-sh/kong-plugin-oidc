@@ -31,7 +31,7 @@ docker pull ghcr.io/suwa-sh/kong-plugin-oidc:latest
 | タグ | 内容 |
 |------|------|
 | `latest` | 最新ビルド |
-| `kong-3.11.0.8-1.6.0` | Kong 3.11.0.8 + プラグイン 1.6.0 |
+| `kong-3.11.0.8-1.6.1` | Kong 3.11.0.8 + プラグイン 1.6.1 |
 
 `KONG_PLUGINS` 環境変数に `oidc` を追加して使用する:
 

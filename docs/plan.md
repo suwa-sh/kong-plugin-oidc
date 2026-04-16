@@ -107,6 +107,13 @@
 - [x] マルチノード構成でのセッション共有確認（E2E-05: Docker Compose 2台構成で Kong-1 ログイン → Kong-2 セッション有効）
   - テストケース一覧: [spec/e2e/README.md](../spec/e2e/README.md)
 
+### 9. バグフィックス v1.6.1
+
+- [x] [issue #1](https://github.com/suwa-sh/kong-plugin-oidc/issues/1) 対応: `response.user = nil` で `injectHeaders` が 500 でクラッシュする
+  - `handler.lua` に `non_nil_sources` ヘルパーを追加し、nil を除外したテーブルを `injectHeaders` に渡す
+  - `utils.lua` の `injectHeaders` に `if source then` ガードを追加（防御的ガード）
+  - ユニットテスト追加: `response.user = nil` の Auth Code フローで id_token からクレーム解決されること
+
 ## 設定例（完成イメージ）
 
 ```yaml

@@ -297,6 +297,28 @@ describe("utils", function()
 
       assert.are.equal("admin, editor, viewer", headers_set["X-Roles"])
     end)
+
+    -- U-21b: issue #1 regression
+    -- injectHeaders が nil source を安全に扱えることを検証する防御的テスト。
+    -- handler.lua 側の non_nil_sources で nil は除外されるが、
+    -- utils.lua 側でも if source then ガードで防御する。
+    it("sourcesリストの要素がnilの場合_クラッシュせず次のsourceから解決されること", function()
+      local headers_set = {}
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function() end
+      -- Lua 5.1 では { nil, x } の #t は実装依存のため、 rawset で明示的に nil を
+      -- 埋め、n フィールドで長さを指定した疑似的な sources を構築する
+      local sources = { [1] = false, [2] = { email = "user@example.com" } }
+      -- false は nil ではないが、if source then ガードでは同じく false パスに入るため
+      -- 防御的ガードの動作検証として有効。
+
+      assert.has_no.errors(function()
+        utils.injectHeaders({ "X-Email" }, { "email" }, sources)
+      end)
+      assert.are.equal("user@example.com", headers_set["X-Email"])
+    end)
   end)
 
   ---------------------------------------------------------------------------

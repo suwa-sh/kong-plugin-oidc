@@ -338,6 +338,45 @@ describe("handler", function()
         assert.are.same({ "admin" }, kong.ctx.shared.authenticated_groups)
       end)
 
+      -- H-12c: issue #1 regression
+      -- session_contents.user = false のとき response.user が nil になり、
+      -- { response.user, response.id_token } が nil ホール付きテーブルリテラルになる。
+      -- handler.lua の non_nil_sources ヘルパーで nil を除外し、id_token 側から
+      -- header_claims を解決できることを検証する。
+      it("response.userがnilでheader_claims設定ありの場合_id_tokenからクレームが解決されてクラッシュしないこと", function()
+        local headers_set = {}
+        package.loaded["resty.openidc"].authenticate = function()
+          return {
+            user = nil,
+            id_token = {
+              sub = "u1",
+              iss = "https://example.com",
+              email = "user@example.com",
+              custom_claim_1 = "E12345",
+            },
+            access_token = "access-tok",
+          }, nil
+        end
+        ngx.var.uri = "/api"
+        ngx.var.request_uri = "/api"
+        kong.service.request.set_header = function(name, value)
+          headers_set[name] = value
+        end
+        kong.service.request.clear_header = function() end
+        kong.client.authenticate = function() end
+        local config = mocks.make_config({
+          header_names  = { "X-User-EmployeeId", "X-User-Email" },
+          header_claims = { "custom_claim_1", "email" },
+        })
+
+        assert.has_no.errors(function()
+          handler:access(config)
+        end)
+
+        assert.are.equal("E12345", headers_set["X-User-EmployeeId"])
+        assert.are.equal("user@example.com", headers_set["X-User-Email"])
+      end)
+
       -- H-13
       it("unauthorized_requestエラーの場合_401が返されること", function()
         package.loaded["resty.openidc"].authenticate = function()

@@ -207,16 +207,19 @@ function M.injectHeaders(header_names, header_claims, sources)
     claim = header_claims[i]
     kong.service.request.clear_header(header)
     for j = 1, #sources do
-      local source, claim_value
-      source = sources[j]
-      claim_value = source[claim]
-      -- Convert table to string if claim is a table
-      if type(claim_value) == "table" then
-        claim_value = table.concat(claim_value, ", ")
-      end
-      if (source and source[claim]) then
-        kong.service.request.set_header(header, claim_value)
-        break
+      local source = sources[j]
+      -- Guard against nil sources: 呼び出し側で nil を除外しているが
+      -- 他の呼び出し元からの防御として再チェックする
+      if source then
+        local claim_value = source[claim]
+        -- Convert table to string if claim is a table
+        if type(claim_value) == "table" then
+          claim_value = table.concat(claim_value, ", ")
+        end
+        if claim_value then
+          kong.service.request.set_header(header, claim_value)
+          break
+        end
       end
     end
   end
