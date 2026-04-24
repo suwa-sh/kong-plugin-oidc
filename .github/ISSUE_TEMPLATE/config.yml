@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: セキュリティ脆弱性の報告
+    url: https://github.com/suwa-sh/kong-plugin-oidc/security/advisories/new
+    about: 脆弱性は公開 issue ではなく非公開の Security Advisory で報告してください
+  - name: 質問・ディスカッション
+    url: https://github.com/suwa-sh/kong-plugin-oidc/discussions
+    about: バグ報告・機能提案以外の質問はこちら

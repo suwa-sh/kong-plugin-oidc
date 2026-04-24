@@ -1,0 +1,57 @@
+name: ドキュメント改善
+description: README / docs の不足・誤り・改善提案
+title: "[Docs] "
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 種別
+      options:
+        - missing (記述が不足している)
+        - incorrect (実装と食い違っている)
+        - unclear (分かりづらい)
+        - restructure (構成を見直したい)
+    validations:
+      required: true
+
+  - type: input
+    id: target
+    attributes:
+      label: 対象ファイル・セクション
+      description: README / docs / examples など。分かる範囲で記載してください。
+      placeholder: "README.md の filters 設定パラメータ"
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 問題
+      description: README / docs のどこに何が不足・誤っているか。該当ファイルのリンク推奨。
+      placeholder: |
+        README の `filters` 節に、値が Lua パターン（PCRE ではない）であることが書かれていない。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 追加・修正したい内容
+      description: 骨子の箇条書き
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考
+      description: 関連 issue / PR / 実装該当箇所

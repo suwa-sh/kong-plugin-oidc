@@ -1,0 +1,162 @@
+name: バグ報告
+description: 期待どおりに動作しない挙動を報告する
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        再現手順と原因（分かっている範囲）を記載してください。
+        修正方針の詳細（diff レベル）は PR 側に寄せる想定です。
+
+        セキュリティ脆弱性が疑われる場合は、この issue テンプレートではなく
+        [Security Advisory](https://github.com/suwa-sh/kong-plugin-oidc/security/advisories/new) から非公開で報告してください。
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: 影響の大きさ
+      options:
+        - high (本番影響 / データ損失 / 認証不能)
+        - medium (機能不全・回避策あり)
+        - low (軽微・ドキュメント不整合)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 対象バージョン
+      placeholder: "plugin 1.6.1 / Kong 3.11.0.8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime_mode
+    attributes:
+      label: 実行形態
+      description: 問題が発生した構成（分かる範囲で）
+      options:
+        - DB-less
+        - DB-backed
+        - KIC / Kubernetes
+        - Docker image
+        - その他 / 不明
+
+  - type: dropdown
+    id: auth_flow
+    attributes:
+      label: 認証経路
+      description: 関連する認証フロー（分かる範囲で）
+      options:
+        - Authorization Code
+        - Bearer JWT
+        - Introspection
+        - bearer_only
+        - 不明 / 複数
+
+  - type: dropdown
+    id: session_storage
+    attributes:
+      label: セッション保存
+      options:
+        - cookie
+        - redis
+        - 該当なし
+        - 不明
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 要約
+      description: 3 行以内で「何が / どう壊れているか / 誰が困るか」
+      placeholder: |
+        handler.lua の introspect 経路で WWW-Authenticate ヘッダに err を sanitize せず埋めている。
+        CRLF を含む err が入るとレスポンスヘッダがインジェクションされ得る。
+        bearer_only = "yes" で運用している利用者に影響。
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      description: 最小の再現方法
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 関連設定の抜粋
+      description: 秘密情報は伏せて、再現に必要な plugin config の最小 YAML を記載してください。
+      render: yaml
+      placeholder: |
+        plugins:
+          - name: oidc
+            config:
+              client_id: example
+              client_secret: "***"
+              discovery: https://example.com/.well-known/openid-configuration
+
+  - type: textarea
+    id: current
+    attributes:
+      label: 現状の挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: cause
+    attributes:
+      label: 原因（分かっている範囲）
+      description: 該当ファイル・行・該当コード片
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案する対応
+      description: 方針の箇条書き。詳細な diff は PR に譲る。
+
+  - type: textarea
+    id: implementation_example
+    attributes:
+      label: 変更例
+      description: 実装イメージ。確定 diff ではなく参考例として記載してください。
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: test
+    attributes:
+      label: テスト観点
+      placeholder: |
+        - unit: ...
+        - integration: ...
+        - e2e: ...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考
+      description: 関連 issue / PR / ドキュメント URL / 実装該当箇所
