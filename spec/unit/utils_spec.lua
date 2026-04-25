@@ -353,6 +353,88 @@ describe("utils", function()
       assert.is_nil(user.id)
       assert.is_nil(user.username)
     end)
+
+    -- U-24a (issue #3): subとpreferred_usernameの両方がある場合_X-Credential-Identifierにsubが設定されること
+    it("subとpreferred_username両方ありの場合_X-Credential-Identifierにsubが設定されること", function()
+      local headers_set = {}
+      kong.client.authenticate = function() end
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function(name)
+        headers_set[name] = nil
+      end
+      local user = { sub = "248289761001", preferred_username = "alice" }
+
+      utils.setCredentials(user)
+
+      assert.are.equal("248289761001", headers_set["X-Credential-Identifier"])
+    end)
+
+    -- U-24b (issue #3): preferred_usernameがない場合でも_X-Credential-Identifierにsubが設定されること
+    it("preferred_usernameなしの場合_X-Credential-Identifierにsubが設定されること", function()
+      local headers_set = {}
+      kong.client.authenticate = function() end
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function(name)
+        headers_set[name] = nil
+      end
+      local user = { sub = "248289761001" }
+
+      utils.setCredentials(user)
+
+      assert.are.equal("248289761001", headers_set["X-Credential-Identifier"])
+    end)
+
+    -- U-24c (issue #3): subなし・preferred_usernameありの場合_後方互換でusernameにフォールバックすること
+    it("subなし_preferred_usernameありの場合_X-Credential-Identifierがusernameにフォールバックすること", function()
+      local headers_set = {}
+      kong.client.authenticate = function() end
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function(name)
+        headers_set[name] = nil
+      end
+      local user = { preferred_username = "alice" }
+
+      utils.setCredentials(user)
+
+      assert.are.equal("alice", headers_set["X-Credential-Identifier"])
+    end)
+
+    -- U-24d (issue #3): subとpreferred_username両方ない場合_X-Credential-Identifierがクリアされること
+    it("subもpreferred_usernameもない場合_X-Credential-Identifierがクリアされること", function()
+      local cleared = {}
+      kong.client.authenticate = function() end
+      kong.service.request.set_header = function() end
+      kong.service.request.clear_header = function(name)
+        cleared[name] = true
+      end
+      local user = { name = "Alice" }
+
+      utils.setCredentials(user)
+
+      assert.is_true(cleared["X-Credential-Identifier"])
+    end)
+
+    -- U-24e (issue #3): credential.idが優先されkong.client.authenticateにsubが渡されること
+    it("kong.client.authenticateに渡されるcredentialのidがsubであること", function()
+      local authenticated_credential
+      kong.client.authenticate = function(_, credential)
+        authenticated_credential = credential
+      end
+      kong.service.request.set_header = function() end
+      kong.service.request.clear_header = function() end
+      local user = { sub = "user-123", preferred_username = "alice" }
+
+      utils.setCredentials(user)
+
+      assert.are.equal("user-123", authenticated_credential.id)
+      assert.are.equal("alice", authenticated_credential.username)
+    end)
   end)
 
   ---------------------------------------------------------------------------
