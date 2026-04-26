@@ -113,6 +113,10 @@
   - `handler.lua` に `non_nil_sources` ヘルパーを追加し、nil を除外したテーブルを `injectHeaders` に渡す
   - `utils.lua` の `injectHeaders` に `if source then` ガードを追加（防御的ガード）
   - ユニットテスト追加: `response.user = nil` の Auth Code フローで id_token からクレーム解決されること
+- [x] [issue #5](https://github.com/suwa-sh/kong-plugin-oidc/issues/5) 対応: `validate_scope=yes` で複数スコープ設定を正しく検証できない
+  - `handler.lua` に `token_contains_required_scopes` ヘルパーを追加し、設定側 `oidcConfig.scope` とトークン側 `res.scope` をスペース区切りで分解して包含関係を検証
+  - 設定の全必須スコープがトークン側に含まれている場合のみ通過、不足/`res.scope` が nil の場合は 403
+  - ユニットテスト追加: 複数スコープ成功ケース、必須スコープ不足ケース、`res.scope` が nil のケース
 
 ## 設定例（完成イメージ）
 

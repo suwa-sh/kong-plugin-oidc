@@ -21,6 +21,27 @@ local function non_nil_sources(...)
   return sources
 end
 
+-- OAuth/OIDC のスコープはスペース区切りリストとして扱う。
+-- 必須スコープ（required_scope）に含まれるすべてのスコープが
+-- トークン側スコープ（token_scope）に含まれているかを検証する。
+local function token_contains_required_scopes(token_scope, required_scope)
+  if type(token_scope) ~= "string" or type(required_scope) ~= "string" then
+    return false
+  end
+  local token_scopes = {}
+  for scope in token_scope:gmatch("%S+") do
+    token_scopes[scope] = true
+  end
+  local has_required = false
+  for required in required_scope:gmatch("%S+") do
+    has_required = true
+    if not token_scopes[required] then
+      return false
+    end
+  end
+  return has_required
+end
+
 function OidcHandler:configure(configs)
   -- Map openidc debug log level to configured Nginx log level
   -- Iterate through all configs and take the highest priority (least verbose) level
@@ -203,16 +224,7 @@ introspect = function(oidcConfig)
       return nil
     end
     if oidcConfig.validate_scope == "yes" then
-      local validScope = false
-      if res.scope then
-        for scope in res.scope:gmatch("([^ ]+)") do
-          if scope == oidcConfig.scope then
-            validScope = true
-            break
-          end
-        end
-      end
-      if not validScope then
+      if not token_contains_required_scopes(res.scope, oidcConfig.scope) then
         kong.log.err("Scope validation failed")
         return kong.response.error(ngx.HTTP_FORBIDDEN)
       end

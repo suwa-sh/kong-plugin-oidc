@@ -505,6 +505,68 @@ describe("handler", function()
         assert.are.equal(403, error_code)
       end)
 
+      -- H-18a: issue #5 regression
+      -- 複数の必須スコープがすべてトークンに含まれる場合は成功する
+      it("validate_scope有効で複数必須スコープがすべてトークンに含まれる場合_成功すること", function()
+        setup_bearer_header()
+        package.loaded["resty.openidc"].introspect = function()
+          return { sub = "u1", preferred_username = "user1", scope = "openid profile email" }, nil
+        end
+        local error_called = false
+        kong.response.error = function() error_called = true end
+        local config = mocks.make_config({
+          introspection_endpoint = "https://example.com/introspect",
+          validate_scope = "yes",
+          scope = "openid profile",
+        })
+
+        handler:access(config)
+
+        assert.is_false(error_called)
+      end)
+
+      -- H-18c: issue #5 regression
+      -- 複数の必須スコープのうち一部しかトークンに含まれない場合は 403
+      it("validate_scope有効で必須スコープが一部不足する場合_403が返されること", function()
+        setup_bearer_header()
+        package.loaded["resty.openidc"].introspect = function()
+          return { sub = "u1", scope = "openid" }, nil
+        end
+        local error_code
+        kong.response.error = function(code) error_code = code end
+        kong.log.err = function() end
+        local config = mocks.make_config({
+          introspection_endpoint = "https://example.com/introspect",
+          validate_scope = "yes",
+          scope = "openid profile",
+        })
+
+        handler:access(config)
+
+        assert.are.equal(403, error_code)
+      end)
+
+      -- H-18d: issue #5 regression
+      -- res.scope が nil の場合は 403
+      it("validate_scope有効でres_scopeがnilの場合_403が返されること", function()
+        setup_bearer_header()
+        package.loaded["resty.openidc"].introspect = function()
+          return { sub = "u1" }, nil
+        end
+        local error_code
+        kong.response.error = function(code) error_code = code end
+        kong.log.err = function() end
+        local config = mocks.make_config({
+          introspection_endpoint = "https://example.com/introspect",
+          validate_scope = "yes",
+          scope = "openid",
+        })
+
+        handler:access(config)
+
+        assert.are.equal(403, error_code)
+      end)
+
       -- H-18b
       it("Bearerトークンなし_bearer_onlyでもない場合_nilが返されること", function()
         ngx.req.get_headers = function() return {} end
