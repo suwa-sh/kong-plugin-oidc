@@ -225,6 +225,19 @@ function M.injectHeaders(header_names, header_claims, sources)
   end
 end
 
+-- WWW-Authenticate quoted-string 値の sanitize（CRLFインジェクション/構文崩壊の防御、RFC 6750 §3 / RFC 7235）
+function M.sanitize_header_value(value)
+  if type(value) ~= "string" then
+    return "server_error"
+  end
+  local sanitized = value:gsub("[%c]", "")
+  sanitized = sanitized:gsub("\\", "\\\\"):gsub('"', '\\"')
+  if #sanitized > 200 then
+    sanitized = sanitized:sub(1, 200)
+  end
+  return sanitized
+end
+
 function M.has_bearer_access_token()
   local header = ngx.req.get_headers()['Authorization']
   if header and header:find(" ") then

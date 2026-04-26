@@ -197,7 +197,9 @@ introspect = function(oidcConfig)
     end
     if err then
       if oidcConfig.bearer_only == "yes" then
-        ngx.header["WWW-Authenticate"] = 'Bearer realm="' .. oidcConfig.realm .. '",error="' .. err .. '"' -- luacheck: ignore 122
+        local realm = utils.sanitize_header_value(oidcConfig.realm)
+        local error_value = utils.sanitize_header_value(err)
+        ngx.header["WWW-Authenticate"] = 'Bearer realm="' .. realm .. '",error="' .. error_value .. '"' -- luacheck: ignore 122
         return kong.response.error(ngx.HTTP_UNAUTHORIZED)
       end
       return nil

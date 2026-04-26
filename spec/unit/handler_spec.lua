@@ -545,6 +545,36 @@ describe("handler", function()
         assert.truthy(ngx.header["WWW-Authenticate"])
         assert.truthy(ngx.header["WWW-Authenticate"]:find("Bearer realm="))
       end)
+
+      -- H-19b: issue #8 regression
+      -- err にCRLFや " が混入した場合でも WWW-Authenticate ヘッダが
+      -- 単一の quoted-string として崩れないことを検証する。
+      it("errにCRLFやクォートが含まれる場合_WWW-Authenticateヘッダがsanitizeされること", function()
+        setup_bearer_header()
+        package.loaded["resty.openidc"].introspect = function()
+          return nil, 'invalid_token"\r\nX-Injected: pwned'
+        end
+        kong.response.error = function() end
+        local config = mocks.make_config({
+          introspection_endpoint = "https://example.com/introspect",
+          bearer_only = "yes",
+          realm = "kong",
+        })
+
+        handler:access(config)
+
+        local header = ngx.header["WWW-Authenticate"]
+        assert.truthy(header)
+        -- CRLF が含まれない（ヘッダインジェクション不可）
+        assert.is_nil(header:find("\r"))
+        assert.is_nil(header:find("\n"))
+        -- realm の構造は維持される
+        assert.truthy(header:find('Bearer realm="kong"'))
+        -- err のクォートはエスケープされ、quoted-string 内に閉じ込められている
+        assert.truthy(header:find('error="invalid_token\\"', 1, true))
+        -- 末尾は単一の閉じクォート
+        assert.are.equal('"', header:sub(-1))
+      end)
     end)
 
     ---------------------------------------------------------------------------

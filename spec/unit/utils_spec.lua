@@ -383,6 +383,63 @@ describe("utils", function()
   end)
 
   ---------------------------------------------------------------------------
+  -- sanitize_header_value (U-30 〜 U-36) issue #8
+  -- WWW-Authenticate ヘッダの quoted-string 値の安全化
+  ---------------------------------------------------------------------------
+  describe("sanitize_header_value", function()
+    -- U-30
+    it("CR/LFを含む場合_除去されること", function()
+      local result = utils.sanitize_header_value("invalid_token\r\nX-Bad: 1")
+
+      assert.are.equal("invalid_tokenX-Bad: 1", result)
+    end)
+
+    -- U-31
+    it("ダブルクォートを含む場合_エスケープされること", function()
+      local result = utils.sanitize_header_value('foo"bar')
+
+      assert.are.equal('foo\\"bar', result)
+    end)
+
+    -- U-32
+    it("バックスラッシュを含む場合_エスケープされること", function()
+      local result = utils.sanitize_header_value("foo\\bar")
+
+      assert.are.equal("foo\\\\bar", result)
+    end)
+
+    -- U-33
+    it("制御文字を含む場合_除去されること", function()
+      local result = utils.sanitize_header_value("foo\t\0\bbar")
+
+      assert.are.equal("foobar", result)
+    end)
+
+    -- U-34
+    it("非文字列の場合_server_errorが返されること", function()
+      assert.are.equal("server_error", utils.sanitize_header_value(nil))
+      assert.are.equal("server_error", utils.sanitize_header_value(123))
+      assert.are.equal("server_error", utils.sanitize_header_value({}))
+    end)
+
+    -- U-35
+    it("200文字超の場合_切り詰められること", function()
+      local long = string.rep("a", 300)
+
+      local result = utils.sanitize_header_value(long)
+
+      assert.are.equal(200, #result)
+    end)
+
+    -- U-36
+    it("通常の文字列の場合_変更されないこと", function()
+      local result = utils.sanitize_header_value("invalid_token")
+
+      assert.are.equal("invalid_token", result)
+    end)
+  end)
+
+  ---------------------------------------------------------------------------
   -- has_common_item (U-26 〜 U-29)
   ---------------------------------------------------------------------------
   describe("has_common_item", function()
