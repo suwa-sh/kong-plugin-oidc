@@ -142,7 +142,7 @@ function M.make_config(overrides)
     scope                                  = "openid",
     validate_scope                         = "no",
     response_type                          = "code",
-    ssl_verify                             = "no",
+    ssl_verify                             = "yes",
     use_jwks                               = "no",
     token_endpoint_auth_method             = "client_secret_post",
     encryption_secret                      = "test-encryption-secret",

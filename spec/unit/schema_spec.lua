@@ -62,4 +62,18 @@ describe("schema", function()
       assert.is_true(field.referenceable)
     end)
   end)
+
+  ---------------------------------------------------------------------------
+  -- ssl_verify のセキュアバイデフォルト
+  ---------------------------------------------------------------------------
+  describe("ssl_verify default", function()
+    -- S-10
+    it("ssl_verify_スキーマ定義_デフォルトがyesであること", function()
+      local field = find_field("ssl_verify")
+
+      assert.is_not_nil(field)
+      assert.is_true(field.required)
+      assert.are.equal("yes", field.default)
+    end)
+  end)
 end)
