@@ -105,7 +105,7 @@ return {
             ssl_verify = {
               type = "string",
               required = true,
-              default = "no"
+              default = "yes"
             }
           },
           {

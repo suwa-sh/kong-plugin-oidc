@@ -90,7 +90,7 @@ bash spec/e2e/run-e2e.sh
 | `config.discovery` | `https://.well-known/openid-configuration` | yes | OIDC ディスカバリエンドポイント |
 | `config.scope` | `openid` | yes | OAuth2 トークンスコープ。OIDC では `openid` 必須 |
 | `config.response_type` | `code` | yes | OAuth2 レスポンスタイプ |
-| `config.ssl_verify` | `no` | yes | OIDC Provider への SSL 検証を有効化 |
+| `config.ssl_verify` | `yes` | yes | OIDC Provider への SSL 検証を有効化。本番では `yes` 必須。自己署名証明書を使う dev 環境のみ `no` を明示指定 |
 | `config.token_endpoint_auth_method` | `client_secret_post` | yes | トークンエンドポイントの認証方式 |
 | `config.timeout` | | no | OIDC エンドポイント呼び出しのタイムアウト |
 | `config.redirect_uri` | | no | 認証成功後に OP がリダイレクトする URI |
