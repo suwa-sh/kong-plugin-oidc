@@ -185,7 +185,7 @@ bash spec/e2e/run-e2e.sh
 - `X-USERINFO`: ユーザー情報（Base64 エンコード JSON）
 - `X-Access-Token`: アクセストークン（生トークン文字列、または `access_token_as_bearer=yes` で `Bearer <token>` 形式）
 - `X-ID-Token`: ID トークン（Base64 エンコード JSON）
-- `X-Credential-Identifier`: ユーザーの `sub` クレーム
+- `X-Credential-Identifier`: ユーザーの `sub` クレーム（`sub` が無い場合は `preferred_username` にフォールバック）
 
 Kong の認証情報として `kong.client.authenticate()` が呼ばれ、以下が設定される:
 
@@ -195,6 +195,8 @@ credential = {
     username = "preferred_username クレームの値"
 }
 ```
+
+`X-Credential-Identifier` には `credential.id`（= `sub`）が優先的に設定される。OIDC の subject identifier はユーザーの安定識別子であり、下流サービスの認証文脈に適しているためである。`sub` が存在しない例外的なトークンの場合のみ、後方互換のため `credential.username`（= `preferred_username`）にフォールバックする。
 
 グループ情報はトークンの `groups` クレーム（設定変更可能）から取得し、`kong.ctx.shared.authenticated_groups` に設定される。Kong の認可プラグインで利用可能。
 

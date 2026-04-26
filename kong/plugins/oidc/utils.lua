@@ -146,7 +146,9 @@ local function set_consumer(consumer, credential)
     clear_header(constants.HEADERS.CONSUMER_USERNAME)
   end
 
-  if credential and credential.username then
+  if credential and credential.id then
+    set_header(constants.HEADERS.CREDENTIAL_IDENTIFIER, credential.id)
+  elseif credential and credential.username then
     set_header(constants.HEADERS.CREDENTIAL_IDENTIFIER, credential.username)
   else
     clear_header(constants.HEADERS.CREDENTIAL_IDENTIFIER)
