@@ -5,24 +5,59 @@ on:
     tags:
       - "v*"
 
+env:
+  IMAGE: ghcr.io/suwa-sh/kong-plugin-oidc
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      plugin: ${{ steps.versions.outputs.plugin }}
+      matrix: ${{ steps.versions.outputs.matrix }}
+      latest_kong: ${{ steps.versions.outputs.latest_kong }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build matrix from .kong-versions
+        id: versions
+        run: |
+          PLUGIN="${GITHUB_REF_NAME#v}"
+          # コメント・空行除去
+          mapfile -t KONG_VERSIONS < <(grep -v '^#' .kong-versions | grep -v '^$' | tr -d '[:space:]' | grep .)
+          if [ "${#KONG_VERSIONS[@]}" -eq 0 ]; then
+            echo "ERROR: .kong-versions is empty" >&2
+            exit 1
+          fi
+          # JSON 配列に整形
+          MATRIX=$(printf '%s\n' "${KONG_VERSIONS[@]}" | jq -R . | jq -sc .)
+          # latest = 末尾の版（運用ルール: ファイルは古→新の順で記載）
+          LATEST="${KONG_VERSIONS[-1]}"
+          echo "plugin=$PLUGIN" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "latest_kong=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Plugin: $PLUGIN"
+          echo "Matrix: $MATRIX"
+          echo "Latest Kong: $LATEST"
+
   build-and-push:
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        kong_version: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract versions
-        id: versions
+      - name: Compute Kong short tag
+        id: kong
         run: |
-          PLUGIN_VERSION="${GITHUB_REF_NAME#v}"
-          KONG_VERSION=$(grep 'KONG_VERSION=' Dockerfile | head -1 | sed 's/.*KONG_VERSION=//')
-          # ubuntu サフィックスを除去して Kong メジャー.マイナー.パッチを取得
-          KONG_SHORT=$(echo "$KONG_VERSION" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?')
-          echo "plugin=$PLUGIN_VERSION" >> "$GITHUB_OUTPUT"
-          echo "kong=$KONG_SHORT" >> "$GITHUB_OUTPUT"
+          # 例: 3.12.0.5-ubuntu → 3.12.0.5
+          KONG_SHORT=$(echo "${{ matrix.kong_version }}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?')
+          echo "short=$KONG_SHORT" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -34,13 +69,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push
+      - name: Build and push (per Kong version)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          build-args: |
+            KONG_VERSION=${{ matrix.kong_version }}
           tags: |
-            ghcr.io/suwa-sh/kong-plugin-oidc:latest
-            ghcr.io/suwa-sh/kong-plugin-oidc:kong-${{ steps.versions.outputs.kong }}-${{ steps.versions.outputs.plugin }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.IMAGE }}:kong-${{ steps.kong.outputs.short }}-${{ needs.prepare.outputs.plugin }}
+          cache-from: type=gha,scope=${{ matrix.kong_version }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.kong_version }}
+
+  tag-latest:
+    needs: [prepare, build-and-push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Retag latest Kong build as :latest
+        run: |
+          KONG_SHORT=$(echo "${{ needs.prepare.outputs.latest_kong }}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?')
+          SRC="${IMAGE}:kong-${KONG_SHORT}-${{ needs.prepare.outputs.plugin }}"
+          DST="${IMAGE}:latest"
+          echo "Retag $SRC -> $DST"
+          docker buildx imagetools create --tag "$DST" "$SRC"

@@ -1,0 +1,5 @@
+# サポートする Kong Gateway ベースイメージタグ一覧
+# `#` で始まる行と空行は無視される
+# CI matrix とローカル全版テスト (spec/run-all-versions.sh) の入力
+3.11.0.9-ubuntu
+3.12.0.5-ubuntu

@@ -30,8 +30,11 @@ docker pull ghcr.io/suwa-sh/kong-plugin-oidc:latest
 
 | タグ | 内容 |
 |------|------|
-| `latest` | 最新ビルド |
-| `kong-3.11.0.9-1.7.1` | Kong 3.11.0.9 + プラグイン 1.7.1 |
+| `latest` | 最新サポート Kong 版 + 最新プラグイン版 |
+| `kong-3.12.0.5-1.8.0` | Kong 3.12.0.5 + プラグイン 1.8.0 |
+| `kong-3.11.0.9-1.8.0` | Kong 3.11.0.9 + プラグイン 1.8.0 |
+
+サポートする Kong バージョンは `.kong-versions` で管理されており、リリース時にリスト内の全版に対して並列ビルド・push される。
 
 `KONG_PLUGINS` 環境変数に `oidc` を追加して使用する:
 

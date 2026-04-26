@@ -3,6 +3,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        KONG_VERSION: ${KONG_VERSION:-3.12.0.5-ubuntu}
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /kong-test.yml
