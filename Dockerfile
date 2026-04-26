@@ -5,9 +5,9 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
 
 COPY kong/ /plugins/kong
-COPY kong-plugin-oidc-1.6.1-1.rockspec /plugins/
+COPY kong-plugin-oidc-1.7.0-1.rockspec /plugins/
 
 WORKDIR /plugins
-RUN luarocks make kong-plugin-oidc-1.6.1-1.rockspec
+RUN luarocks make kong-plugin-oidc-1.7.0-1.rockspec
 
 USER kong
