@@ -119,8 +119,8 @@ services:
           discovery: http://mockserver:1080/.well-known/openid-configuration
           encryption_secret: dGVzdC1lbmNyeXB0aW9uLXNlY3JldA==
           bearer_jwt_auth_enable: "yes"
-          header_names: ["X-User-Email", "X-User-Name"]
-          header_claims: ["email", "preferred_username"]
+          header_names: ["X-User-Email", "X-User-Name", "X-User-Roles"]
+          header_claims: ["email", "preferred_username", "realm_access.roles"]
 
   # Route 7: Log level WARN (combined with Route 1 DEBUG for I-15 test)
   - name: log-level-warn

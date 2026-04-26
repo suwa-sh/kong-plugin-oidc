@@ -198,6 +198,19 @@ function M.injectGroups(user, claim)
   end
 end
 
+-- ドット区切りパス（例: "realm_access.roles"）をテーブルから解決する。
+-- 中間値が table でない場合は nil を返す。
+local function resolve_claim(source, claim)
+  local value = source
+  for part in string.gmatch(claim, "[^.]+") do
+    if type(value) ~= "table" then
+      return nil
+    end
+    value = value[part]
+  end
+  return value
+end
+
 function M.injectHeaders(header_names, header_claims, sources)
   if #header_names ~= #header_claims then
     kong.log.err('Different number of elements provided in header_names and header_claims. Headers will not be added.')
@@ -213,10 +226,15 @@ function M.injectHeaders(header_names, header_claims, sources)
       -- Guard against nil sources: 呼び出し側で nil を除外しているが
       -- 他の呼び出し元からの防御として再チェックする
       if source then
-        local claim_value = source[claim]
-        -- Convert table to string if claim is a table
+        local claim_value = resolve_claim(source, claim)
         if type(claim_value) == "table" then
-          claim_value = table.concat(claim_value, ", ")
+          -- 配列（# > 0）のみカンマ区切りに変換。map 型はヘッダー注入できないためスキップ
+          if #claim_value > 0 then
+            claim_value = table.concat(claim_value, ", ")
+          else
+            kong.log.err("Claim '" .. claim .. "' is an object and cannot be injected as a header")
+            claim_value = nil
+          end
         end
         if claim_value then
           kong.service.request.set_header(header, claim_value)
