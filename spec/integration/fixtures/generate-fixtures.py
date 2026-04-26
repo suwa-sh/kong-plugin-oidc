@@ -84,6 +84,9 @@ def generate_static_jwt(private_key):
         "preferred_username": "testuser",
         "email": "test@example.com",
         "groups": ["admin", "users"],
+        # ネストしたクレーム（Keycloak の realm_access.roles 互換）
+        # header_claims でドット区切りパスとして参照される
+        "realm_access": {"roles": ["admin", "user"]},
     }
     token = jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": KID})
 
@@ -115,7 +118,7 @@ def generate_mockserver_init(jwks_json, static_jwt):
         ],
         "claims_supported": [
             "sub", "iss", "aud", "exp", "iat",
-            "preferred_username", "email", "groups",
+            "preferred_username", "email", "groups", "realm_access",
         ],
     }
 

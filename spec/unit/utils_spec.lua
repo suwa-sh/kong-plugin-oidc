@@ -319,6 +319,65 @@ describe("utils", function()
       end)
       assert.are.equal("user@example.com", headers_set["X-Email"])
     end)
+
+    -- U-21c: issue #4
+    -- ドット区切りのネストしたクレーム（例: realm_access.roles）が解決され、
+    -- 配列値はカンマ区切り文字列として注入されること。
+    it("ドット区切りクレームの場合_ネストした値が解決されること", function()
+      local headers_set = {}
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function() end
+      local source = {
+        sub = "user-1",
+        realm_access = { roles = { "admin", "user" } },
+      }
+
+      utils.injectHeaders({ "X-Roles" }, { "realm_access.roles" }, { source })
+
+      assert.are.equal("admin, user", headers_set["X-Roles"])
+    end)
+
+    -- U-21d: issue #4
+    -- 存在しないネストパスを指定してもクラッシュせず、ヘッダーも注入されないこと。
+    it("ネストパスが存在しない場合_クラッシュせずヘッダー未注入であること", function()
+      local headers_set = {}
+      local cleared = {}
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function(name)
+        cleared[name] = true
+      end
+      local source = { sub = "user-1" }
+
+      assert.has_no.errors(function()
+        utils.injectHeaders({ "X-Roles" }, { "realm_access.roles" }, { source })
+      end)
+      assert.is_nil(headers_set["X-Roles"])
+      assert.is_true(cleared["X-Roles"])
+    end)
+
+    -- U-21e: issue #4
+    -- map 型 (非配列 table) クレームを指定してもクラッシュせず、
+    -- ヘッダー注入をスキップしてエラーログを出すこと。
+    it("map型クレームの場合_クラッシュせずヘッダー未注入でエラーログが出ること", function()
+      local headers_set = {}
+      kong.service.request.set_header = function(name, value)
+        headers_set[name] = value
+      end
+      kong.service.request.clear_header = function() end
+      local err_logged = false
+      kong.log.err = function() err_logged = true end
+      local source = { realm_access = { foo = "bar" } }
+
+      assert.has_no.errors(function()
+        utils.injectHeaders({ "X-Realm" }, { "realm_access" }, { source })
+      end)
+      assert.is_nil(headers_set["X-Realm"])
+      assert.is_true(err_logged)
+    end)
   end)
 
   ---------------------------------------------------------------------------

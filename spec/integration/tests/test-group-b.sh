@@ -105,6 +105,13 @@ else
   fail "X-User-Name カスタムヘッダーが注入されていること" "header not found"
 fi
 
+# ネストクレーム (realm_access.roles) のドット区切り解決を検証
+if echo "$RECORDED" | grep -qi "x-user-roles.*admin.*user"; then
+  pass "X-User-Roles ネストクレームヘッダーが注入されていること"
+else
+  fail "X-User-Roles ネストクレームヘッダーが注入されていること" "header not found or roles missing"
+fi
+
 # ---------------------------------------------------------------------------
 # B-05: Cookie 改ざん -> 再認証
 # ---------------------------------------------------------------------------

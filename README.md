@@ -240,7 +240,7 @@ x-oidc-name: Alice Smith
 x-oidc-roles: admin, user
 ```
 
-テーブル型のクレーム値（`roles` 等）はカンマ区切り文字列に自動変換される。クレームのソースは認証方式により異なる（Authorization Code: `user` / `id_token`、Bearer JWT / Introspection: トークンクレーム直接）。
+`header_claims` にはドット区切りでネストしたクレームパスを指定できる（例: `realm_access.roles`）。配列型のクレーム値（`roles` 等）はカンマ区切り文字列に自動変換される。map 型（非配列の object）クレームを指定した場合はヘッダー注入をスキップしてエラーログを出力する。クレームのソースは認証方式により異なる（Authorization Code: `user` / `id_token`、Bearer JWT / Introspection: トークンクレーム直接）。
 
 ### アクセストークンを Bearer トークンとして転送
 
