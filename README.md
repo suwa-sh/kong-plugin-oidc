@@ -143,6 +143,13 @@ bash spec/e2e/run-e2e.sh
 | `config.session_redis_database` | `0` | no | Redis データベース番号 |
 | `config.session_redis_ssl` | `no` | no | Redis への SSL 接続 |
 
+#### シークレットの取り扱い
+
+`client_secret` / `encryption_secret` / `session_redis_password` は `encrypted` / `referenceable` 属性付きで宣言されている。
+
+- **Kong keyring 暗号化**: keyring を有効化している環境では DB 上で暗号化されて保存される（[Kong Keyring](https://docs.konghq.com/gateway/latest/kong-enterprise/db-encryption/)）。keyring 未導入環境では従来どおり平文で保存される
+- **Vault 参照**: `{vault://env/OIDC_CLIENT_SECRET}` のような参照値を指定でき、ランタイムに解決される（[Kong Vault references](https://docs.konghq.com/gateway/latest/kong-enterprise/secrets-management/)）
+
 ### ログアウト設定
 
 | パラメータ | デフォルト | 必須 | 説明 |

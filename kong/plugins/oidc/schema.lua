@@ -24,7 +24,9 @@ return {
           {
             client_secret = {
               type = "string",
-              required = true
+              required = true,
+              encrypted = true,
+              referenceable = true,
             }
           },
           {
@@ -131,7 +133,9 @@ return {
             -- https://github.com/bungle/lua-resty-session/tree/v4.0.5?tab=readme-ov-file#session-configuration
             encryption_secret = {
               type = "string",
-              required = true
+              required = true,
+              encrypted = true,
+              referenceable = true,
             }
           },
           {
@@ -199,7 +203,9 @@ return {
           {
             session_redis_password = {
               type = "string",
-              required = false
+              required = false,
+              encrypted = true,
+              referenceable = true,
             }
           },
           {
