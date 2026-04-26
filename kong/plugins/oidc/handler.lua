@@ -1,5 +1,5 @@
 local OidcHandler = {
-    VERSION = "1.7.0",
+    VERSION = "1.7.1",
     PRIORITY = 1000,
 }
 -- luacheck: ignore 212/self
