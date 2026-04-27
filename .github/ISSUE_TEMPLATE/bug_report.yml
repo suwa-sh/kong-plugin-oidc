@@ -28,7 +28,7 @@ body:
     id: version
     attributes:
       label: 対象バージョン
-      placeholder: "plugin 1.6.1 / Kong 3.11.0.8"
+      placeholder: "plugin 1.8.0 / Kong 3.12.0.5"
     validations:
       required: true
 

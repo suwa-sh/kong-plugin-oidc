@@ -136,7 +136,23 @@ KONG_VERSION=3.12.0.5-ubuntu bash spec/e2e/run-e2e.sh
 - プラグイン側の修正が必要ならユーザーに報告
 - 修正後は Step 5 からやり直す
 
-### Step 6: コミット & タグ作成
+### Step 6: CHANGELOG.md 更新
+
+リリース内容を `CHANGELOG.md` の先頭近く（`## [前の版]` の上）に追加する。Keep a Changelog 形式に従い、`Added` / `Changed` / `Fixed` / `BREAKING CHANGES` などのセクションで整理する。
+
+```markdown
+## [X.Y.Z] - YYYY-MM-DD
+
+### Added
+- ...
+
+### Changed
+- ...
+```
+
+CHANGELOG はその後の Step 8（Release 作成）で本文として自動抽出されるため、**ここを書き忘れると Release ノートが空になる**。
+
+### Step 7: コミット & タグ作成
 
 全版テストパス後、変更をコミットし、リリースタグを作成する。
 
@@ -158,28 +174,42 @@ git commit -m "build: <変更内容のサマリ>"
 git tag "v${PLUGIN_VERSION}"
 ```
 
-### Step 7: push して CD をトリガー
+### Step 8: push して CD をトリガー
 
-ユーザーに確認の上、push する。CD ワークフローが `.kong-versions` を読んで matrix ビルド・push する。
+ユーザーに確認の上、push する。CD ワークフロー (`prepare → build-and-push (matrix) → tag-latest → github-release`) が走る:
 
 ```bash
 git push origin main
 git push origin "v${PLUGIN_VERSION}"
 ```
 
-公開されるタグ（`.kong-versions` の各版に対して）:
-- `ghcr.io/suwa-sh/kong-plugin-oidc:kong-<kong-version>-<plugin-version>`
-- `ghcr.io/suwa-sh/kong-plugin-oidc:latest`（最新 Kong 版を指す）
+CD が自動で行うこと:
+- `.kong-versions` の各版を並列ビルドし `kong-<ver>-<plugin>` タグで GHCR に push
+- 最新 Kong 版を `:latest` として retag
+- **CHANGELOG.md の `## [X.Y.Z]` セクションを抽出して GitHub Release を自動作成**（`github-release` ジョブ）
 
-### Step 8: 確認
+### Step 9: 確認
 
 ```bash
 gh run list --workflow=cd.yml --limit=1
+gh release view "v${PLUGIN_VERSION}"  # Release が作成されているか確認
+```
+
+CD が古く `github-release` ジョブが無い場合は手動で Release を作成する:
+```bash
+awk -v ver="$PLUGIN_VERSION" '
+  $0 ~ "^## \\[" ver "\\]" { found=1; next }
+  found && /^## \[/ { exit }
+  found { print }
+' CHANGELOG.md > /tmp/notes.md
+gh release create "v${PLUGIN_VERSION}" --title "v${PLUGIN_VERSION}" --notes-file /tmp/notes.md
+gh release edit "v${PLUGIN_VERSION}" --latest
 ```
 
 ## 重要なルール
 
-- **push の前に必ずユーザー確認**: Step 7 の push は必ずユーザーの承認を得てから実行する
+- **push の前に必ずユーザー確認**: Step 8 の push は必ずユーザーの承認を得てから実行する
+- **CHANGELOG を必ず更新する**: Step 6 で CHANGELOG.md を更新しないと Release ノートが空になり、後から手当てが必要になる
 - **`.kong-versions` 全版で全テストパスが前提**: 1 版でも失敗したらリリースしない（ビルド成功だけでは不十分）
 - **バージョンの一貫性**: rockspec ファイル名・version フィールド・handler.lua VERSION・Dockerfile 参照・CLAUDE.md・README.md のタグ例が全て一致すること
 - **既存 git タグは再利用しない**: 同じ `vX.Y.Z` を使い回すと CD が動かない／履歴が壊れる

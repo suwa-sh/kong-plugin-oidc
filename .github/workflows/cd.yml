@@ -105,3 +105,49 @@ jobs:
           DST="${IMAGE}:latest"
           echo "Retag $SRC -> $DST"
           docker buildx imagetools create --tag "$DST" "$SRC"
+
+  github-release:
+    needs: [prepare, build-and-push, tag-latest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          PLUGIN="${{ needs.prepare.outputs.plugin }}"
+          # CHANGELOG.md から該当バージョンセクションを抽出
+          NOTES=$(awk -v ver="$PLUGIN" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            echo "WARN: CHANGELOG.md に [$PLUGIN] セクションが見つかりません。最小限のノートで作成します。" >&2
+            NOTES="$(printf 'Release v%s\n\nDetails: see git log.' "$PLUGIN")"
+          fi
+          # GHCR タグ一覧を追記
+          IMAGE_TAGS=""
+          while IFS= read -r kv; do
+            short=$(echo "$kv" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?')
+            IMAGE_TAGS="${IMAGE_TAGS}- \`${IMAGE}:kong-${short}-${PLUGIN}\`"$'\n'
+          done < <(sed -e 's/#.*$//' -e 's/[[:space:]]//g' .kong-versions | grep .)
+          IMAGE_TAGS="${IMAGE_TAGS}- \`${IMAGE}:latest\` (= $(echo "${{ needs.prepare.outputs.latest_kong }}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?') を retag)"$'\n'
+          {
+            echo "$NOTES"
+            echo ""
+            echo "### Container images"
+            echo ""
+            printf '%s\n' "$IMAGE_TAGS"
+          } > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release-notes.md
