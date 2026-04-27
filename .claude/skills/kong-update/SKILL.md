@@ -186,3 +186,4 @@ gh run list --workflow=cd.yml --limit=1
 - **alpha/beta/rc は除外**: 安定版リリースのみを対象にする
 - **ポート競合の事前チェック**: テスト前に既存の docker compose 環境を停止する
 - **`while read` ループでは FD 3 を使う**: ループ本体で `docker compose` 等を呼ぶと stdin を消費するので `while read ... <&3; do ... done 3< file` パターンが必須（`spec/run-all-versions.sh` 参照）
+- **`.kong-versions` パース時は改行を保持する**: `tr -d '[:space:]'` は改行ごと削除して全バージョンを 1 文字列に連結してしまう（過去事故あり）。行ごとに処理する `sed -e 's/#.*$//' -e 's/[[:space:]]//g' .kong-versions | grep .` パターンを使う（CD ワークフロー / `spec/run-all-versions.sh` 参照）
