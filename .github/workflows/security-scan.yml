@@ -1,0 +1,107 @@
+name: security-scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Build image
+        run: docker build -t kong:kong-oidc .
+
+      - name: Trivy (SARIF for Security tab)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: kong:kong-oidc
+          severity: CRITICAL,HIGH
+          format: sarif
+          output: trivy.sarif
+          exit-code: '0'
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3
+        with:
+          sarif_file: trivy.sarif
+
+      - name: Trivy (JSON for issue detection)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: kong:kong-oidc
+          severity: CRITICAL,HIGH
+          format: json
+          output: trivy-report.json
+          exit-code: '0'
+
+      - name: Count vulnerabilities
+        id: count
+        run: |
+          COUNT=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy-report.json)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Found $COUNT vulnerabilities (CRITICAL/HIGH)"
+
+      - name: Ensure security label exists
+        if: steps.count.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create security \
+            --color B60205 \
+            --description "Security finding" \
+            --force
+
+      - name: Find existing open issue
+        id: existing
+        if: steps.count.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NUM=$(gh issue list \
+            --label security \
+            --state open \
+            --search "Weekly vuln scan in:title" \
+            --json number \
+            --jq '.[0].number // ""')
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
+
+      - name: Build issue body
+        if: steps.count.outputs.count != '0'
+        env:
+          COUNT: ${{ steps.count.outputs.count }}
+        run: |
+          {
+            echo "## Trivy scan summary"
+            echo ""
+            echo "Total findings (CRITICAL/HIGH): $COUNT"
+            echo ""
+            echo "<details><summary>Details</summary>"
+            echo ""
+            echo '```json'
+            jq '[.Results[]? | {Target, Vulnerabilities: (.Vulnerabilities // [] | map({VulnerabilityID, PkgName, InstalledVersion, FixedVersion, Severity}))}]' trivy-report.json
+            echo '```'
+            echo "</details>"
+          } > issue-body.md
+
+      - name: Create or update issue
+        if: steps.count.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING: ${{ steps.existing.outputs.number }}
+        run: |
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file issue-body.md
+          else
+            gh issue create \
+              --title "Weekly vuln scan $(date -u +%Y-%m-%d)" \
+              --label security \
+              --body-file issue-body.md
+          fi
