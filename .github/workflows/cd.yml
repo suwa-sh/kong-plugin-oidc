@@ -16,7 +16,7 @@ jobs:
       matrix: ${{ steps.versions.outputs.matrix }}
       latest_kong: ${{ steps.versions.outputs.latest_kong }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build matrix from .kong-versions
         id: versions
@@ -50,7 +50,7 @@ jobs:
       matrix:
         kong_version: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Compute Kong short tag
         id: kong
@@ -112,7 +112,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Extract release notes from CHANGELOG.md
         id: notes
